@@ -14,7 +14,7 @@ import javafx.util.Duration;
 
 import java.io.File;
 
-// 继承 Application 是 JavaFX 程序的标准入口11
+// 继承 Application 是 JavaFX 程序的标准入口
 public class ModernMusicPlayer extends Application {
 
     private MediaPlayer mediaPlayer; // 核心播放器
