@@ -2,14 +2,8 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
-import javafx.scene.control.Slider;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.paint.Color;
@@ -18,7 +12,9 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-import java.io.File;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,42 +22,42 @@ public class ModernMusicPlayer extends Application {
 
     private MediaPlayer mediaPlayer;
 
-    // --- 新增：播放列表相关变量 ---
-    private List<File> playList = new ArrayList<>(); // 存文件
-    private int currentIndex = -1;                   // 当前播到第几首
-    private ListView<String> playlistView;           // 界面上的列表控件
+    // --- 核心数据 ---
+    private List<File> playList = new ArrayList<>(); // 内存中的歌曲文件列表
+    private int currentIndex = -1;                   // 当前正在播放的索引
 
-    // 界面组件
+    // --- 界面控件 ---
+    private ListView<String> playlistView;
     private Label statusLabel;
     private Label timeLabel;
     private Slider volumeSlider;
     private Slider progressSlider;
-    private Button btnPlay; // 把播放按钮提出来，方便改变图标
+    private Button btnPlay;
 
     @Override
     public void start(Stage primaryStage) {
-        // --- 1. 整体布局：使用 BorderPane (分上下左右中) ---
+        // --- 1. 整体布局 ---
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: #2b2b2b;");
 
         // --- 2. 左侧：播放列表区域 ---
         VBox leftPanel = new VBox(10);
         leftPanel.setPadding(new Insets(10));
-        leftPanel.setPrefWidth(200); // 宽度固定 200
+        leftPanel.setPrefWidth(220);
         leftPanel.setStyle("-fx-background-color: #333333;");
 
-        Label listTitle = new Label("📜 播放列表");
+        Label listTitle = new Label("📜 混合歌单");
         listTitle.setTextFill(Color.WHITE);
-        listTitle.setFont(new Font(16));
+        listTitle.setFont(new Font("Microsoft YaHei", 16));
 
-        // 列表控件
+        // 列表视图
         playlistView = new ListView<>();
         playlistView.setStyle("-fx-background-color: #333333; -fx-control-inner-background: #333333; -fx-text-fill: white;");
-        VBox.setVgrow(playlistView, Priority.ALWAYS); // 让列表占满剩余高度
+        VBox.setVgrow(playlistView, Priority.ALWAYS);
 
-        // 双击列表切歌
+        // 双击切歌事件
         playlistView.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 2) { // 双击
+            if (event.getClickCount() == 2) {
                 int selectedIndex = playlistView.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0) {
                     playSong(selectedIndex);
@@ -69,29 +65,26 @@ public class ModernMusicPlayer extends Application {
             }
         });
 
-        // 添加文件按钮
-        Button btnAdd = createStyledButton("➕ 添加音乐");
-        btnAdd.setMaxWidth(Double.MAX_VALUE); // 按钮撑满宽度
+        // 手动添加按钮
+        Button btnAdd = createStyledButton("➕ 添加本地文件");
+        btnAdd.setMaxWidth(Double.MAX_VALUE);
         btnAdd.setOnAction(e -> addMusic(primaryStage));
 
         leftPanel.getChildren().addAll(listTitle, btnAdd, playlistView);
-        root.setLeft(leftPanel); // 放到左边
+        root.setLeft(leftPanel);
 
-        // --- 3. 中部/底部：控制区域 ---
+        // --- 3. 中部：控制台区域 ---
         VBox centerPanel = new VBox(20);
         centerPanel.setAlignment(Pos.CENTER);
         centerPanel.setPadding(new Insets(20));
 
-        // 歌名显示
         statusLabel = new Label("ECHO PLAYER");
-        statusLabel.setFont(new Font("Microsoft YaHei", 24));
+        statusLabel.setFont(new Font("Microsoft YaHei", 20));
         statusLabel.setTextFill(Color.WHITE);
 
-        // 时间
         timeLabel = new Label("00:00 / 00:00");
         timeLabel.setTextFill(Color.CYAN);
 
-        // 进度条
         progressSlider = new Slider();
         progressSlider.setDisable(true);
 
@@ -100,10 +93,9 @@ public class ModernMusicPlayer extends Application {
         controls.setAlignment(Pos.CENTER);
 
         Button btnPrev = createStyledButton("⏮ 上一首");
-        btnPlay = createStyledButton("▶ 播放"); // 注意这里还没写逻辑
+        btnPlay = createStyledButton("▶ 播放");
         Button btnNext = createStyledButton("⏭ 下一首");
 
-        // 音量
         Label volLabel = new Label("🔊");
         volLabel.setTextFill(Color.WHITE);
         volumeSlider = new Slider(0, 1, 0.5);
@@ -112,14 +104,13 @@ public class ModernMusicPlayer extends Application {
         controls.getChildren().addAll(btnPrev, btnPlay, btnNext, volLabel, volumeSlider);
 
         centerPanel.getChildren().addAll(statusLabel, timeLabel, progressSlider, controls);
-        root.setCenter(centerPanel); // 放到中间
+        root.setCenter(centerPanel);
 
         // --- 4. 按钮逻辑 ---
-
-        // 播放/暂停
         btnPlay.setOnAction(e -> {
             if (mediaPlayer == null && !playList.isEmpty()) {
-                playSong(0); // 如果没在播，就从第一首开始
+                int selectIndex = playlistView.getSelectionModel().getSelectedIndex();
+                playSong(selectIndex >= 0 ? selectIndex : 0);
             } else if (mediaPlayer != null) {
                 if (mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
                     mediaPlayer.pause();
@@ -131,57 +122,127 @@ public class ModernMusicPlayer extends Application {
             }
         });
 
-        // 上一首
         btnPrev.setOnAction(e -> {
             if (playList.isEmpty()) return;
             int newIndex = currentIndex - 1;
-            if (newIndex < 0) newIndex = playList.size() - 1; // 循环到最后一首
+            if (newIndex < 0) newIndex = playList.size() - 1;
             playSong(newIndex);
         });
 
-        // 下一首
-        btnNext.setOnAction(e -> {
-            playNextSong();
-        });
+        btnNext.setOnAction(e -> playNextSong());
 
-        // 音量和进度条逻辑保持不变
         setupSliderListeners();
 
         // --- 5. 启动 ---
-        Scene scene = new Scene(root, 700, 400); // 窗口变大一点
-        primaryStage.setTitle("EchoPlayer V2 - 播放列表版");
+        Scene scene = new Scene(root, 750, 450);
+        primaryStage.setTitle("EchoPlayer V2 - 完美混合版");
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        // 🔥 关键逻辑：先加载内置，再加载记忆
+        loadProjectMusic();
+        loadSavedPlaylist();
     }
 
-    // --- 核心方法：添加音乐 ---
-    private void addMusic(Stage stage) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("添加音乐");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("音频文件", "*.mp3", "*.wav"));
+    // --- 退出时保存 ---
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+        savePlaylist();
+    }
 
-        // 允许选择多个文件
-        List<File> files = fileChooser.showOpenMultipleDialog(stage);
+    // ---------------------------------------------------------
+    //   数据加载逻辑 (混合双打)
+    // ---------------------------------------------------------
 
+    // 1. 加载项目内置 music 文件夹
+    private void loadProjectMusic() {
+        File musicFolder = new File("music");
+        if (!musicFolder.exists()) {
+            musicFolder.mkdir();
+            return;
+        }
+        File[] files = musicFolder.listFiles((dir, name) ->
+                name.toLowerCase().endsWith(".mp3") || name.toLowerCase().endsWith(".wav") || name.toLowerCase().endsWith(".m4a")
+        );
         if (files != null) {
-            playList.addAll(files); // 加到数据列表
-            for (File f : files) {
-                playlistView.getItems().add(f.getName()); // 加到界面列表
+            for (File file : files) {
+                addToPlaylistSafe(file); // 使用安全添加方法
             }
         }
     }
 
-    // --- 核心方法：播放指定位置的歌 ---
+    // 2. 加载 playlist.txt 记忆文件
+    private void loadSavedPlaylist() {
+        File dataFile = new File("playlist.txt");
+        if (!dataFile.exists()) return;
+
+        try {
+            List<String> paths = Files.readAllLines(Paths.get(dataFile.toURI()));
+            for (String path : paths) {
+                File file = new File(path);
+                // 必须文件存在，且列表里还没有它
+                if (file.exists()) {
+                    addToPlaylistSafe(file);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // 3. 保存当前列表到文件
+    private void savePlaylist() {
+        try {
+            File dataFile = new File("playlist.txt");
+            BufferedWriter writer = new BufferedWriter(new FileWriter(dataFile));
+            for (File file : playList) {
+                writer.write(file.getAbsolutePath());
+                writer.newLine();
+            }
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // 辅助：安全添加（防止重复）
+    private void addToPlaylistSafe(File file) {
+        // 简单去重：检查文件名是否已存在
+        boolean exists = playList.stream().anyMatch(f -> f.getName().equals(file.getName()));
+        if (!exists) {
+            playList.add(file);
+            playlistView.getItems().add(file.getName());
+        }
+    }
+
+    // ---------------------------------------------------------
+    //   播放器核心逻辑 (保持不变)
+    // ---------------------------------------------------------
+
+    private void addMusic(Stage stage) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("添加音乐文件");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("音频文件", "*.mp3", "*.wav"));
+        List<File> files = fileChooser.showOpenMultipleDialog(stage);
+        if (files != null) {
+            for (File f : files) {
+                addToPlaylistSafe(f);
+            }
+        }
+    }
+
     private void playSong(int index) {
         if (index < 0 || index >= playList.size()) return;
 
-        // 停止之前的
-        if (mediaPlayer != null) mediaPlayer.dispose();
+        if (mediaPlayer != null) {
+            mediaPlayer.stop();
+            mediaPlayer.dispose();
+        }
 
         currentIndex = index;
         File file = playList.get(index);
 
-        // 界面联动：选中列表中的那一行
         playlistView.getSelectionModel().select(index);
         statusLabel.setText(file.getName());
         btnPlay.setText("⏸ 暂停");
@@ -193,7 +254,6 @@ public class ModernMusicPlayer extends Application {
             mediaPlayer.setVolume(volumeSlider.getValue());
             mediaPlayer.play();
 
-            // 监听进度
             mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
                 if (!progressSlider.isValueChanging()) {
                     progressSlider.setValue((newT.toMillis() / media.getDuration().toMillis()) * 100);
@@ -201,25 +261,20 @@ public class ModernMusicPlayer extends Application {
                 updateTimeLabel(newT, media.getDuration());
             });
 
-            // 监听：这首歌播完自动下一首
-            mediaPlayer.setOnEndOfMedia(() -> {
-                playNextSong();
-            });
+            mediaPlayer.setOnEndOfMedia(this::playNextSong);
 
         } catch (Exception e) {
-            statusLabel.setText("播放出错: " + e.getMessage());
+            statusLabel.setText("播放失败: " + e.getMessage());
         }
     }
 
-    // --- 核心方法：播放下一首 ---
     private void playNextSong() {
         if (playList.isEmpty()) return;
         int newIndex = currentIndex + 1;
-        if (newIndex >= playList.size()) newIndex = 0; // 循环回到第一首
+        if (newIndex >= playList.size()) newIndex = 0;
         playSong(newIndex);
     }
 
-    // 辅助：设置进度条拖拽监听 (逻辑和之前一样)
     private void setupSliderListeners() {
         volumeSlider.valueProperty().addListener((o, oldV, newV) -> {
             if (mediaPlayer != null) mediaPlayer.setVolume(newV.doubleValue());
@@ -228,6 +283,14 @@ public class ModernMusicPlayer extends Application {
         progressSlider.valueProperty().addListener((o, oldV, newV) -> {
             if (progressSlider.isValueChanging() && mediaPlayer != null) {
                 mediaPlayer.seek(mediaPlayer.getTotalDuration().multiply(newV.doubleValue() / 100.0));
+            }
+        });
+
+        progressSlider.setOnMouseClicked(event -> {
+            if (mediaPlayer != null) {
+                double mouseX = event.getX();
+                double width = progressSlider.getWidth();
+                mediaPlayer.seek(mediaPlayer.getTotalDuration().multiply(mouseX / width));
             }
         });
     }
@@ -251,7 +314,6 @@ public class ModernMusicPlayer extends Application {
         return btn;
     }
 
-    // 入口
     public static void main(String[] args) {
         launch(args);
     }
