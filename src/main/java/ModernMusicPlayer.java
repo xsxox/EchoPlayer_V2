@@ -39,7 +39,9 @@ import javafx.util.Duration;
 import java.awt.*;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -58,7 +60,7 @@ public class ModernMusicPlayer extends Application {
     private enum PlayMode { LOOP_ALL, SHUFFLE, LOOP_ONE }
     private PlayMode currentMode = PlayMode.LOOP_ALL;
 
-    // --- SVG 图标数据 ---
+    // --- SVG 图标数据 (细线条版) ---
     private static final String SVG_SHUFFLE = "M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z";
     private static final String SVG_LOOP = "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z";
     private static final String SVG_ONE = "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3zm-1-9h-1v4h2V9z";
@@ -81,7 +83,7 @@ public class ModernMusicPlayer extends Application {
     private Label volIcon;
     private ComboBox<String> themeSelector;
 
-    // ✨ 核心显示区 (切换黑胶/倒影频谱)
+    // --- 核心显示区 (切换黑胶/倒影频谱) ---
     private StackPane centerDisplayArea;
     private HBox visualizerBox;
     private Rectangle[] spectrumBars;
@@ -128,8 +130,8 @@ public class ModernMusicPlayer extends Application {
         btnAdd.setOnAction(e -> addMusic(primaryStage));
 
         themeSelector = new ComboBox<>();
-        themeSelector.getItems().addAll("🌑 Classic Dark", "⚪️ Apple Clean", "👾 Cyberpunk", "💧 Dynamic Blue");
-        themeSelector.setValue("🌑 Classic Dark");
+        themeSelector.getItems().addAll("Spotify Dark", "Apple Clean", "Cyberpunk", "Dynamic Blue");
+        themeSelector.setValue("Spotify Dark");
         themeSelector.setOnAction(e -> applyTheme(themeSelector.getValue()));
         themeSelector.setMaxWidth(Double.MAX_VALUE);
         themeSelector.setPrefHeight(35);
@@ -150,10 +152,14 @@ public class ModernMusicPlayer extends Application {
         centerDisplayArea.setStyle("-fx-cursor: hand;");
         centerDisplayArea.setOnMouseClicked(e -> toggleMainView());
 
+        // 创建黑胶
         createVinylRecord();
+
+        // 创建倒影频谱 (默认隐藏)
         createSkylineVisualizer();
         visualizerBox.setVisible(false);
         visualizerBox.setOpacity(0);
+
         centerDisplayArea.getChildren().addAll(vinylRecord, visualizerBox);
 
         // 2. 信息
@@ -214,250 +220,14 @@ public class ModernMusicPlayer extends Application {
         setupDragAndDrop(scene);
         hideScrollBars(scene);
 
-        // ✨✨✨ 关键修改：先设置 Scene，再应用主题，确保 CSS 能注入到 Scene 中 ✨✨✨
-        primaryStage.setTitle("EchoPlayer V18 - Perfect Context Menu");
+        primaryStage.setTitle("EchoPlayer V19 - Ultimate Stable Edition");
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        // 放在最后调用，确保 Scene 已经存在
-        applyTheme("🌑 Classic Dark");
+        applyTheme("Spotify Dark");
 
         loadProjectMusic();
         loadSavedPlaylist();
-    }
-
-    // ==========================================
-    //   ✨ 修复：动态生成右键菜单 CSS
-    // ==========================================
-    private void updateThemeCss(Scene scene, String menuBg, String menuText, String menuHover, String menuBorder) {
-        if (scene == null) return;
-
-        String css =
-                // 菜单整体
-                ".context-menu {" +
-                        "    -fx-background-color: " + menuBg + ";" +
-                        "    -fx-background-radius: 8;" +
-                        "    -fx-border-radius: 8;" +
-                        "    -fx-border-color: " + menuBorder + ";" +
-                        "    -fx-border-width: 1;" +
-                        "    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 10, 0, 0, 4);" +
-                        "}" +
-                        // 菜单项文字
-                        ".menu-item .label {" +
-                        "    -fx-text-fill: " + menuText + ";" +
-                        "}" +
-                        // 选中/悬停背景
-                        ".menu-item:focused {" +
-                        "    -fx-background-color: " + menuHover + ";" +
-                        "}" +
-                        // 选中/悬停文字
-                        ".menu-item:focused .label {" +
-                        "    -fx-text-fill: " + menuText + ";" +
-                        "}";
-
-        try {
-            String base64Css = Base64.getEncoder().encodeToString(css.getBytes("UTF-8"));
-            scene.getStylesheets().add("data:text/css;base64," + base64Css);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    // ==========================================
-    //   UI 样式与主题
-    // ==========================================
-    private void applyTheme(String themeName) {
-        String bgRoot, bgLeft, textMain, textSub, accentColor, sliderTrack;
-        String comboBg, comboText, comboBorder, comboHover;
-        // 新增菜单变量
-        String menuBg, menuText, menuHover, menuBorder;
-        String playBtnStyle;
-
-        boolean isLightMode = false;
-        boolean isCyberpunk = false;
-        boolean isDynamicBlue = false;
-
-        switch (themeName) {
-            case "⚪️ Apple Clean":
-                bgRoot = "linear-gradient(to bottom right, #FFFFFF, #F2F2F7)";
-                bgLeft = "rgba(245, 245, 247, 0.8)";
-                textMain = "#1C1C1E"; textSub = "#8E8E93"; accentColor = "#FA2D48";
-                sliderTrack = "#E5E5EA"; comboBg = "#FFFFFF"; comboText = "#1C1C1E"; comboBorder = "#D1D1D6"; comboHover = "#F2F2F7";
-                // 菜单配色 (白底黑字)
-                menuBg = "#FFFFFF"; menuText = "#000000"; menuHover = "#F2F2F7"; menuBorder = "#D1D1D6";
-                playBtnStyle = "-fx-background-color: linear-gradient(to bottom right, #FF2D55, #FF5E3A); -fx-text-fill: white;";
-                isLightMode = true; break;
-
-            case "🌑 Classic Dark":
-                bgRoot = "linear-gradient(to bottom, #121212, #181818)";
-                bgLeft = "#000000";
-                textMain = "#FFFFFF"; textSub = "#B3B3B3"; accentColor = "#1DB954";
-                sliderTrack = "#404040"; comboBg = "#282828"; comboText = "#FFFFFF"; comboBorder = "#404040"; comboHover = "#3E3E3E";
-                // 菜单配色 (深灰底白字)
-                menuBg = "#282828"; menuText = "#FFFFFF"; menuHover = "#404040"; menuBorder = "#333333";
-                playBtnStyle = "-fx-background-color: #FFFFFF; -fx-text-fill: #000000;";
-                break;
-
-            case "👾 Cyberpunk":
-                bgRoot = "linear-gradient(to bottom right, #0b0b19, #1a1a3d)";
-                bgLeft = "#13132b";
-                textMain = "#00f3ff"; textSub = "#ff0099"; accentColor = "#00f3ff";
-                sliderTrack = "#2a2a40"; comboBg = "#2a2a40"; comboText = "#00f3ff"; comboBorder = "#ff0099"; comboHover = "#3d3d5c";
-                // 菜单配色 (蓝黑底，霓虹字，粉边框)
-                menuBg = "#1a1a3d"; menuText = "#00f3ff"; menuHover = "#ff0099"; menuBorder = "#00f3ff";
-                playBtnStyle = "-fx-background-color: #00f3ff; -fx-text-fill: #000000;";
-                isCyberpunk = true; break;
-
-            case "💧 Dynamic Blue":
-            default:
-                bgRoot = "linear-gradient(to bottom, #0f172a, #1e293b)";
-                bgLeft = "#0f172a";
-                textMain = "#e0f2fe"; textSub = "#94a3b8"; accentColor = "#38bdf8";
-                sliderTrack = "#334155"; comboBg = "#1e293b"; comboText = "#ffffff"; comboBorder = "#38bdf8"; comboHover = "#334155";
-                // 菜单配色 (深蓝底白字)
-                menuBg = "#1e293b"; menuText = "#e0f2fe"; menuHover = "#334155"; menuBorder = "#38bdf8";
-                playBtnStyle = "-fx-background-color: #38bdf8; -fx-text-fill: #000000;";
-                isDynamicBlue = true; break;
-        }
-
-        // 应用基础颜色
-        root.setStyle("-fx-background-color: " + bgRoot + ";");
-        leftPanel.setStyle("-fx-background-color: " + bgLeft + "; -fx-border-color: transparent;");
-        listTitle.setTextFill(Color.web(accentColor));
-        titleLabel.setTextFill(Color.web(textMain));
-        artistLabel.setTextFill(Color.web(textSub));
-        timeLabel.setTextFill(Color.web(textSub));
-        volIcon.setTextFill(Color.web(textSub));
-
-        // ✨ 注入右键菜单 CSS ✨
-        if (root.getScene() != null) {
-            updateThemeCss(root.getScene(), menuBg, menuText, menuHover, menuBorder);
-        }
-
-        updateVisualizerColor(accentColor);
-        if (searchField != null) {
-            String promptColor = isLightMode ? "#999" : "#666";
-            searchField.setStyle("-fx-background-color: transparent; -fx-text-fill: " + textMain + "; -fx-prompt-text-fill: " + promptColor + ";");
-        }
-
-        if (isCyberpunk) {
-            titleLabel.setEffect(new Glow(0.8));
-            artistLabel.setEffect(new DropShadow(10, Color.web("#ff0099")));
-        } else {
-            titleLabel.setEffect(null);
-            artistLabel.setEffect(null);
-        }
-
-        String sliderStyle = String.format("-fx-control-inner-background: %s; -fx-accent: %s; -fx-background-color: transparent;", sliderTrack, accentColor);
-        progressSlider.setStyle(sliderStyle);
-        volumeSlider.setStyle(sliderStyle);
-
-        final String finalMainText = textMain;
-        final String hoverColor = isLightMode ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)";
-        final String selectionColor = isLightMode ? "#E5E5EA" : (isCyberpunk ? "rgba(0, 243, 255, 0.2)" : "#333333");
-
-        playlistView.setCellFactory(lv -> new ListCell<String>() {
-            private final Text text1 = new Text();
-            private final Text text2 = new Text();
-            private final Pane container = new Pane(text1, text2);
-            private final Rectangle clip = new Rectangle();
-            private ParallelTransition marqueeAnimation;
-            private final double GAP = 60;
-
-            {
-                Font font = Font.font(16);
-                text1.setFont(font); text2.setFont(font);
-                text1.setTextOrigin(javafx.geometry.VPos.CENTER); text2.setTextOrigin(javafx.geometry.VPos.CENTER);
-                container.prefWidthProperty().bind(lv.widthProperty().subtract(40));
-                container.setPrefHeight(30);
-                clip.widthProperty().bind(container.widthProperty()); clip.heightProperty().bind(container.heightProperty());
-                container.setClip(clip);
-                text1.layoutYProperty().bind(container.heightProperty().divide(2)); text2.layoutYProperty().bind(container.heightProperty().divide(2));
-                text2.setVisible(false);
-            }
-
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (marqueeAnimation != null) marqueeAnimation.stop();
-                text1.setTranslateX(0); text2.setTranslateX(0); text2.setVisible(false);
-
-                if (empty || item == null) {
-                    setText(null); setGraphic(null); setStyle("-fx-background-color: transparent;");
-                    setContextMenu(null);
-                } else {
-                    setText(null); text1.setText(item); text2.setText(item);
-                    text1.setFill(Color.web(finalMainText)); text2.setFill(Color.web(finalMainText));
-                    setGraphic(container);
-                    setContextMenu(createContextMenu(item));
-
-                    String baseStyle = "-fx-padding: 8 15 8 15; -fx-background-radius: 8;";
-                    if (isSelected()) {
-                        setStyle(baseStyle + "-fx-background-color: " + selectionColor + "; -fx-font-weight: bold;");
-                        Platform.runLater(this::startMarquee);
-                    } else {
-                        setStyle(baseStyle + "-fx-background-color: transparent;");
-                    }
-                    setOnMouseEntered(e -> { if (!isSelected()) setStyle(baseStyle + "-fx-background-color: " + hoverColor + ";"); });
-                    setOnMouseExited(e -> { if (!isSelected()) setStyle(baseStyle + "-fx-background-color: transparent;"); });
-                }
-            }
-
-            private void startMarquee() {
-                if (getItem() == null || !isSelected()) return;
-                double textW = text1.getLayoutBounds().getWidth();
-                double cellW = container.getWidth();
-                if (cellW == 0) cellW = container.getPrefWidth();
-                if (textW > cellW && cellW > 0) {
-                    text2.setVisible(true);
-                    double cycleDistance = textW + GAP;
-                    TranslateTransition tt1 = new TranslateTransition(); tt1.setNode(text1); tt1.setFromX(0); tt1.setToX(-cycleDistance); tt1.setInterpolator(Interpolator.LINEAR);
-                    TranslateTransition tt2 = new TranslateTransition(); tt2.setNode(text2); tt2.setFromX(cycleDistance); tt2.setToX(0); tt2.setInterpolator(Interpolator.LINEAR);
-                    marqueeAnimation = new ParallelTransition(tt1, tt2);
-                    double durationSeconds = cycleDistance / 25.0;
-                    marqueeAnimation.setCycleCount(Animation.INDEFINITE);
-                    tt1.setDuration(Duration.seconds(durationSeconds)); tt2.setDuration(Duration.seconds(durationSeconds));
-                    marqueeAnimation.play();
-                }
-            }
-        });
-        playlistView.refresh();
-
-        themeSelector.setStyle("-fx-background-color: " + comboBg + "; -fx-text-fill: " + comboText + "; -fx-border-color: " + comboBorder + "; -fx-background-radius: 6; -fx-border-radius: 6;");
-        final String fComboBg = comboBg; final String fComboText = comboText; final String fComboHover = comboHover;
-        themeSelector.setButtonCell(new ListCell<String>() {
-            @Override protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (item != null) { setText(item); setTextFill(Color.web(fComboText)); setStyle("-fx-background-color: transparent;"); }
-            }
-        });
-        themeSelector.setCellFactory(lv -> new ListCell<String>() {
-            @Override protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) { setText(null); setStyle("-fx-background-color: " + fComboBg + ";"); }
-                else {
-                    setText(item); setTextFill(Color.web(fComboText));
-                    setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;");
-                    setOnMouseEntered(e -> setStyle("-fx-background-color: " + fComboHover + "; -fx-padding: 8 10 8 10;"));
-                    setOnMouseExited(e -> setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;"));
-                }
-            }
-        });
-
-        currentPlayBtnStyleBase = playBtnStyle + "-fx-background-radius: 100; -fx-min-width: 65px; -fx-min-height: 65px; -fx-cursor: hand;";
-        boolean isPlaying = (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING);
-        updatePlayButtonIconStyle(isPlaying);
-
-        if(themeName.equals("⚪️ Apple Clean")) btnPlay.setEffect(new DropShadow(15, Color.rgb(255, 45, 85, 0.4)));
-        else if (themeName.equals("🌑 Classic Dark")) btnPlay.setEffect(new DropShadow(10, Color.rgb(255, 255, 255, 0.2)));
-        else btnPlay.setEffect(isCyberpunk ? new DropShadow(15, Color.web("#00f3ff")) : null);
-
-        addHoverAnimation(btnPlay);
-        updateButtonStyle(btnAdd, textSub, accentColor, isLightMode);
-        updateButtonStyle(btnPrev, textMain, accentColor, isLightMode);
-        updateButtonStyle(btnNext, textMain, accentColor, isLightMode);
-        updateButtonStyle(btnMode, textMain, accentColor, isLightMode);
-        updateVinylStyle(themeName);
     }
 
     // ==========================================
@@ -606,7 +376,7 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   右键菜单 (移除旧的 hardcoded style)
+    //   右键菜单 & CSS 注入
     // ==========================================
     private ContextMenu createContextMenu(String item) {
         ContextMenu cm = new ContextMenu();
@@ -634,16 +404,208 @@ public class ModernMusicPlayer extends Application {
             }
         });
 
-        // ❌ 删除旧的硬编码样式
-        // cm.setStyle("-fx-background-color: #333; -fx-text-fill: white;");
-
         cm.getItems().addAll(playItem, openItem, new SeparatorMenuItem(), deleteItem);
         return cm;
     }
 
+    private void updateThemeCss(Scene scene, String menuBg, String menuText, String menuHover, String menuBorder) {
+        if (scene == null) return;
+        String css =
+                ".context-menu { -fx-background-color: " + menuBg + "; -fx-background-radius: 8; -fx-border-radius: 8; -fx-border-color: " + menuBorder + "; -fx-border-width: 1; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 10, 0, 0, 4); }" +
+                        ".menu-item .label { -fx-text-fill: " + menuText + "; }" +
+                        ".menu-item:focused { -fx-background-color: " + menuHover + "; }" +
+                        ".menu-item:focused .label { -fx-text-fill: " + menuText + "; }";
+        try { scene.getStylesheets().add("data:text/css;base64," + Base64.getEncoder().encodeToString(css.getBytes("UTF-8"))); } catch (Exception e) { e.printStackTrace(); }
+    }
+
     // ==========================================
-    //   其他辅助方法
+    //   UI 样式与主题
     // ==========================================
+    private void applyTheme(String themeName) {
+        String bgRoot, bgLeft, textMain, textSub, accentColor, sliderTrack;
+        String comboBg, comboText, comboBorder, comboHover;
+        String menuBg, menuText, menuHover, menuBorder;
+        String playBtnStyle;
+
+        boolean isLightMode = false;
+        boolean isCyberpunk = false;
+        boolean isDynamicBlue = false;
+
+        switch (themeName) {
+            case "Apple Clean":
+                bgRoot = "linear-gradient(to bottom right, #FFFFFF, #F2F2F7)";
+                bgLeft = "rgba(245, 245, 247, 0.8)";
+                textMain = "#1C1C1E"; textSub = "#8E8E93"; accentColor = "#FA2D48";
+                sliderTrack = "#E5E5EA"; comboBg = "#FFFFFF"; comboText = "#1C1C1E"; comboBorder = "#D1D1D6"; comboHover = "#F2F2F7";
+                menuBg = "#FFFFFF"; menuText = "#000000"; menuHover = "#F2F2F7"; menuBorder = "#D1D1D6";
+                playBtnStyle = "-fx-background-color: linear-gradient(to bottom right, #FF2D55, #FF5E3A); -fx-text-fill: white;";
+                isLightMode = true; break;
+
+            case "Spotify Dark":
+                bgRoot = "linear-gradient(to bottom, #121212, #181818)";
+                bgLeft = "#000000";
+                textMain = "#FFFFFF"; textSub = "#B3B3B3"; accentColor = "#1DB954";
+                sliderTrack = "#404040"; comboBg = "#282828"; comboText = "#FFFFFF"; comboBorder = "#404040"; comboHover = "#3E3E3E";
+                menuBg = "#282828"; menuText = "#FFFFFF"; menuHover = "#404040"; menuBorder = "#333333";
+                playBtnStyle = "-fx-background-color: #FFFFFF; -fx-text-fill: #000000;";
+                break;
+
+            case "Cyberpunk":
+                bgRoot = "linear-gradient(to bottom right, #0b0b19, #1a1a3d)";
+                bgLeft = "#13132b";
+                textMain = "#00f3ff"; textSub = "#ff0099"; accentColor = "#00f3ff";
+                sliderTrack = "#2a2a40"; comboBg = "#2a2a40"; comboText = "#00f3ff"; comboBorder = "#ff0099"; comboHover = "#3d3d5c";
+                menuBg = "#1a1a3d"; menuText = "#00f3ff"; menuHover = "#ff0099"; menuBorder = "#00f3ff";
+                playBtnStyle = "-fx-background-color: #00f3ff; -fx-text-fill: #000000;";
+                isCyberpunk = true; break;
+
+            case "Dynamic Blue":
+            default:
+                bgRoot = "linear-gradient(to bottom, #0f172a, #1e293b)";
+                bgLeft = "#0f172a";
+                textMain = "#e0f2fe"; textSub = "#94a3b8"; accentColor = "#38bdf8";
+                sliderTrack = "#334155"; comboBg = "#1e293b"; comboText = "#ffffff"; comboBorder = "#38bdf8"; comboHover = "#334155";
+                menuBg = "#1e293b"; menuText = "#e0f2fe"; menuHover = "#334155"; menuBorder = "#38bdf8";
+                playBtnStyle = "-fx-background-color: #38bdf8; -fx-text-fill: #000000;";
+                isDynamicBlue = true; break;
+        }
+
+        root.setStyle("-fx-background-color: " + bgRoot + ";");
+        leftPanel.setStyle("-fx-background-color: " + bgLeft + "; -fx-border-color: transparent;");
+        listTitle.setTextFill(Color.web(accentColor));
+        titleLabel.setTextFill(Color.web(textMain));
+        artistLabel.setTextFill(Color.web(textSub));
+        timeLabel.setTextFill(Color.web(textSub));
+        volIcon.setTextFill(Color.web(textSub));
+
+        if (root.getScene() != null) updateThemeCss(root.getScene(), menuBg, menuText, menuHover, menuBorder);
+
+        updateVisualizerColor(accentColor);
+        if (searchField != null) {
+            String promptColor = isLightMode ? "#999" : "#666";
+            searchField.setStyle("-fx-background-color: transparent; -fx-text-fill: " + textMain + "; -fx-prompt-text-fill: " + promptColor + ";");
+        }
+
+        if (isCyberpunk) {
+            titleLabel.setEffect(new Glow(0.8));
+            artistLabel.setEffect(new DropShadow(10, Color.web("#ff0099")));
+        } else {
+            titleLabel.setEffect(null);
+            artistLabel.setEffect(null);
+        }
+
+        String sliderStyle = String.format("-fx-control-inner-background: %s; -fx-accent: %s; -fx-background-color: transparent;", sliderTrack, accentColor);
+        progressSlider.setStyle(sliderStyle);
+        volumeSlider.setStyle(sliderStyle);
+
+        final String finalMainText = textMain;
+        final String hoverColor = isLightMode ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)";
+        final String selectionColor = isLightMode ? "#E5E5EA" : (isCyberpunk ? "rgba(0, 243, 255, 0.2)" : "#333333");
+
+        playlistView.setCellFactory(lv -> new ListCell<String>() {
+            private final Text text1 = new Text();
+            private final Text text2 = new Text();
+            private final Pane container = new Pane(text1, text2);
+            private final Rectangle clip = new Rectangle();
+            private ParallelTransition marqueeAnimation;
+            private final double GAP = 60;
+
+            {
+                Font font = Font.font(16);
+                text1.setFont(font); text2.setFont(font);
+                text1.setTextOrigin(javafx.geometry.VPos.CENTER); text2.setTextOrigin(javafx.geometry.VPos.CENTER);
+                container.prefWidthProperty().bind(lv.widthProperty().subtract(40));
+                container.setPrefHeight(30);
+                clip.widthProperty().bind(container.widthProperty()); clip.heightProperty().bind(container.heightProperty());
+                container.setClip(clip);
+                text1.layoutYProperty().bind(container.heightProperty().divide(2)); text2.layoutYProperty().bind(container.heightProperty().divide(2));
+                text2.setVisible(false);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (marqueeAnimation != null) marqueeAnimation.stop();
+                text1.setTranslateX(0); text2.setTranslateX(0); text2.setVisible(false);
+
+                if (empty || item == null) {
+                    setText(null); setGraphic(null); setStyle("-fx-background-color: transparent;");
+                    setContextMenu(null);
+                } else {
+                    setText(null); text1.setText(item); text2.setText(item);
+                    text1.setFill(Color.web(finalMainText)); text2.setFill(Color.web(finalMainText));
+                    setGraphic(container);
+                    setContextMenu(createContextMenu(item));
+
+                    String baseStyle = "-fx-padding: 8 15 8 15; -fx-background-radius: 8;";
+                    if (isSelected()) {
+                        setStyle(baseStyle + "-fx-background-color: " + selectionColor + "; -fx-font-weight: bold;");
+                        Platform.runLater(this::startMarquee);
+                    } else {
+                        setStyle(baseStyle + "-fx-background-color: transparent;");
+                    }
+                    setOnMouseEntered(e -> { if (!isSelected()) setStyle(baseStyle + "-fx-background-color: " + hoverColor + ";"); });
+                    setOnMouseExited(e -> { if (!isSelected()) setStyle(baseStyle + "-fx-background-color: transparent;"); });
+                }
+            }
+
+            private void startMarquee() {
+                if (getItem() == null || !isSelected()) return;
+                double textW = text1.getLayoutBounds().getWidth();
+                double cellW = container.getWidth();
+                if (cellW == 0) cellW = container.getPrefWidth();
+                if (textW > cellW && cellW > 0) {
+                    text2.setVisible(true);
+                    double cycleDistance = textW + GAP;
+                    TranslateTransition tt1 = new TranslateTransition(); tt1.setNode(text1); tt1.setFromX(0); tt1.setToX(-cycleDistance); tt1.setInterpolator(Interpolator.LINEAR);
+                    TranslateTransition tt2 = new TranslateTransition(); tt2.setNode(text2); tt2.setFromX(cycleDistance); tt2.setToX(0); tt2.setInterpolator(Interpolator.LINEAR);
+                    marqueeAnimation = new ParallelTransition(tt1, tt2);
+                    double durationSeconds = cycleDistance / 25.0;
+                    marqueeAnimation.setCycleCount(Animation.INDEFINITE);
+                    tt1.setDuration(Duration.seconds(durationSeconds)); tt2.setDuration(Duration.seconds(durationSeconds));
+                    marqueeAnimation.play();
+                }
+            }
+        });
+        playlistView.refresh();
+
+        themeSelector.setStyle("-fx-background-color: " + comboBg + "; -fx-text-fill: " + comboText + "; -fx-border-color: " + comboBorder + "; -fx-background-radius: 6; -fx-border-radius: 6;");
+        final String fComboBg = comboBg; final String fComboText = comboText; final String fComboHover = comboHover;
+        themeSelector.setButtonCell(new ListCell<String>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (item != null) { setText(item); setTextFill(Color.web(fComboText)); setStyle("-fx-background-color: transparent;"); }
+            }
+        });
+        themeSelector.setCellFactory(lv -> new ListCell<String>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setText(null); setStyle("-fx-background-color: " + fComboBg + ";"); }
+                else {
+                    setText(item); setTextFill(Color.web(fComboText));
+                    setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;");
+                    setOnMouseEntered(e -> setStyle("-fx-background-color: " + fComboHover + "; -fx-padding: 8 10 8 10;"));
+                    setOnMouseExited(e -> setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;"));
+                }
+            }
+        });
+
+        currentPlayBtnStyleBase = playBtnStyle + "-fx-background-radius: 100; -fx-min-width: 65px; -fx-min-height: 65px; -fx-cursor: hand;";
+        boolean isPlaying = (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING);
+        updatePlayButtonIconStyle(isPlaying);
+
+        if(themeName.equals("Apple Clean")) btnPlay.setEffect(new DropShadow(15, Color.rgb(255, 45, 85, 0.4)));
+        else if (themeName.equals("Spotify Dark")) btnPlay.setEffect(new DropShadow(10, Color.rgb(255, 255, 255, 0.2)));
+        else btnPlay.setEffect(isCyberpunk ? new DropShadow(15, Color.web("#00f3ff")) : null);
+
+        addHoverAnimation(btnPlay);
+        updateButtonStyle(btnAdd, textSub, accentColor, isLightMode);
+        updateButtonStyle(btnPrev, textMain, accentColor, isLightMode);
+        updateButtonStyle(btnNext, textMain, accentColor, isLightMode);
+        updateButtonStyle(btnMode, textMain, accentColor, isLightMode);
+        updateVinylStyle(themeName);
+    }
+
     private Button createSvgButton(String svgContent) {
         Button btn = new Button();
         SVGPath svg = new SVGPath();
@@ -680,16 +642,16 @@ public class ModernMusicPlayer extends Application {
     private void updateVinylStyle(String theme) {
         disc.setFill(Color.BLACK);
         vinylText.setFill(Color.WHITE);
-        if (theme.equals("⚪️ Apple Clean")) {
+        if (theme.equals("Apple Clean")) {
             disc.setFill(Color.web("#2C2C2E")); disc.setEffect(new DropShadow(20, Color.rgb(0,0,0,0.15))); vinylText.setFill(Color.web("#E5E5EA"));
             labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#FF5E3A")), new Stop(1, Color.web("#FF2D55"))));
-        } else if (theme.equals("🌑 Classic Dark")) {
+        } else if (theme.equals("Spotify Dark")) {
             disc.setFill(Color.web("#121212")); disc.setEffect(new DropShadow(15, Color.rgb(255,255,255,0.05))); vinylText.setFill(Color.web("#AAAAAA"));
             labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#1DB954")), new Stop(1, Color.web("#191414"))));
-        } else if (theme.equals("👾 Cyberpunk")) {
+        } else if (theme.equals("Cyberpunk")) {
             disc.setFill(Color.BLACK); disc.setEffect(new DropShadow(20, Color.web("#00f3ff"))); vinylText.setFill(Color.web("#00f3ff"));
             labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#00f3ff")), new Stop(1, Color.web("#ff0099"))));
-        } else if (theme.equals("💧 Dynamic Blue")) {
+        } else if (theme.equals("Dynamic Blue")) {
             disc.setFill(Color.web("#020617")); disc.setEffect(new DropShadow(20, Color.web("#38bdf8"))); vinylText.setFill(Color.web("#e0f2fe"));
             labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#7dd3fc")), new Stop(1, Color.web("#0ea5e9"))));
         }
@@ -791,11 +753,12 @@ public class ModernMusicPlayer extends Application {
         if (files != null) { for (File f : files) addToPlaylistSafe(f); }
     }
 
+    // ✨✨✨ 修复：使用 UTF-8 读取播放列表 ✨✨✨
     private void loadSavedPlaylist() {
         try {
             File f = new File("playlist.txt");
             if (f.exists()) {
-                List<String> lines = Files.readAllLines(Paths.get(f.toURI()));
+                List<String> lines = Files.readAllLines(Paths.get(f.toURI()), StandardCharsets.UTF_8);
                 for (String path : lines) {
                     File file = new File(path);
                     if (file.exists()) addToPlaylistSafe(file);
@@ -804,8 +767,10 @@ public class ModernMusicPlayer extends Application {
         } catch (Exception e) { e.printStackTrace(); }
     }
 
+    // ✨✨✨ 修复：绝对路径去重 ✨✨✨
     private void addToPlaylistSafe(File file) {
-        if (playList.stream().noneMatch(f -> f.getName().equals(file.getName()))) {
+        boolean exists = playList.stream().anyMatch(f -> f.getAbsolutePath().equals(file.getAbsolutePath()));
+        if (!exists) {
             playList.add(file);
             listModel.add(file.getName());
         }
@@ -837,9 +802,10 @@ public class ModernMusicPlayer extends Application {
         });
     }
 
+    // ✨✨✨ 修复：使用 UTF-8 写入播放列表 ✨✨✨
     @Override public void stop() throws Exception {
         super.stop();
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter("playlist.txt"))) {
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("playlist.txt"), StandardCharsets.UTF_8))) {
             for (File f : playList) { writer.write(f.getAbsolutePath()); writer.newLine(); }
         }
     }
