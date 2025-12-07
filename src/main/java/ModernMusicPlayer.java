@@ -49,9 +49,9 @@ import java.util.Random;
 public class ModernMusicPlayer extends Application {
 
     private MediaPlayer mediaPlayer;
-    private List<File> playList = new ArrayList<>(); // 原始数据源
-    private ObservableList<String> listModel = FXCollections.observableArrayList(); // UI 数据源
-    private FilteredList<String> filteredList; // ✨ 功能3：搜索过滤后的列表
+    private List<File> playList = new ArrayList<>();
+    private ObservableList<String> listModel = FXCollections.observableArrayList();
+    private FilteredList<String> filteredList;
     private int currentIndex = -1;
 
     private enum PlayMode { LOOP_ALL, SHUFFLE, LOOP_ONE }
@@ -69,7 +69,7 @@ public class ModernMusicPlayer extends Application {
     private BorderPane root;
     private VBox leftPanel;
     private ListView<String> playlistView;
-    private TextField searchField; // ✨ 功能3：搜索框
+    private TextField searchField;
     private Label listTitle;
     private Label titleLabel;
     private Label artistLabel;
@@ -80,13 +80,14 @@ public class ModernMusicPlayer extends Application {
     private Label volIcon;
     private ComboBox<String> themeSelector;
 
-    // ✨ 功能1：音频可视化组件
-    private HBox visualizerContainer;
+    // ✨ 核心显示区 (用于切换黑胶/频谱)
+    private StackPane centerDisplayArea;
+    private HBox visualizerBox;
     private Rectangle[] spectrumBars;
-    private static final int BANDS = 40; // 频谱条数量
+    private static final int BANDS = 60; // 增加频谱数量，使其更细腻
 
     private String currentPlayBtnStyleBase = "";
-    private String currentAccentColor = "#1DB954"; // 记录当前强调色，用于给频谱上色
+    private String currentAccentColor = "#1DB954";
 
     // --- 黑胶组件 ---
     private StackPane vinylRecord;
@@ -106,16 +107,13 @@ public class ModernMusicPlayer extends Application {
         listTitle = new Label("LIBRARY");
         listTitle.setFont(Font.font("Verdana", FontWeight.BOLD, 13));
 
-        // ✨ 功能3：搜索框初始化
         HBox searchBox = createSearchBox();
 
-        // 列表初始化
-        filteredList = new FilteredList<>(listModel, p -> true); // 包装数据源
+        filteredList = new FilteredList<>(listModel, p -> true);
         playlistView = new ListView<>(filteredList);
         playlistView.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent;");
         VBox.setVgrow(playlistView, Priority.ALWAYS);
 
-        // 列表点击事件 (修正：需处理过滤后的索引映射)
         playlistView.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
                 String selectedItem = playlistView.getSelectionModel().getSelectedItem();
@@ -136,28 +134,41 @@ public class ModernMusicPlayer extends Application {
         themeSelector.setPrefHeight(35);
 
         VBox bottomLeft = new VBox(15, btnAdd, themeSelector);
-        leftPanel.getChildren().addAll(listTitle, searchBox, playlistView, bottomLeft); // 加入搜索框
+        leftPanel.getChildren().addAll(listTitle, searchBox, playlistView, bottomLeft);
         root.setLeft(leftPanel);
 
         // --- 中间 ---
-        VBox centerPanel = new VBox(25); // 稍微减小间距
+        VBox centerPanel = new VBox(25);
         centerPanel.setAlignment(Pos.CENTER);
         centerPanel.setPadding(new Insets(30, 40, 30, 40));
 
-        // 1. 黑胶
+        // ✨✨✨ 1. 创建显示区域 (可切换) ✨✨✨
+        centerDisplayArea = new StackPane();
+        centerDisplayArea.setMaxSize(280, 280);
+        centerDisplayArea.setMinSize(280, 280);
+        centerDisplayArea.setStyle("-fx-cursor: hand;"); // 手型鼠标，提示可点击
+        // 点击切换视图
+        centerDisplayArea.setOnMouseClicked(e -> toggleMainView());
+
+        // 创建黑胶
         createVinylRecord();
+
+        // 创建大尺寸频谱 (默认隐藏)
+        createLargeVisualizer();
+        visualizerBox.setVisible(false);
+        visualizerBox.setOpacity(0);
+
+        // 将两者叠放在一起
+        centerDisplayArea.getChildren().addAll(vinylRecord, visualizerBox);
 
         // 2. 信息
         VBox infoBox = new VBox(8);
         infoBox.setAlignment(Pos.CENTER);
         titleLabel = new Label("EchoPlayer");
         titleLabel.setFont(Font.font("Microsoft YaHei", FontWeight.BOLD, 28));
-        artistLabel = new Label("Ready to Play");
+        artistLabel = new Label("Click Disc to Switch Mode"); // 提示用户
         artistLabel.setFont(Font.font("Microsoft YaHei", FontWeight.NORMAL, 16));
         infoBox.getChildren().addAll(titleLabel, artistLabel);
-
-        // ✨ 功能1：音频可视化 (放在进度条上方)
-        createVisualizer();
 
         // 3. 进度
         VBox progressBox = new VBox(8);
@@ -188,8 +199,8 @@ public class ModernMusicPlayer extends Application {
         bottomBar.setAlignment(Pos.CENTER);
         bottomBar.getChildren().addAll(controls, volBox);
 
-        // 将可视化组件加入布局
-        centerPanel.getChildren().addAll(vinylRecord, infoBox, visualizerContainer, progressBox, bottomBar);
+        // 这里不再直接添加 vinylRecord，而是添加 centerDisplayArea
+        centerPanel.getChildren().addAll(centerDisplayArea, infoBox, progressBox, bottomBar);
         root.setCenter(centerPanel);
 
         // --- 绑定 ---
@@ -198,7 +209,7 @@ public class ModernMusicPlayer extends Application {
         btnNext.setOnAction(e -> playNextSong());
         setupSliderListeners();
 
-        Scene scene = new Scene(root, 1050, 750); // 稍微加高一点窗口
+        Scene scene = new Scene(root, 1050, 750);
 
         scene.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.SPACE) togglePlay();
@@ -210,7 +221,7 @@ public class ModernMusicPlayer extends Application {
         hideScrollBars(scene);
         applyTheme("🌑 Classic Dark");
 
-        primaryStage.setTitle("EchoPlayer V13 - Professional Edition");
+        primaryStage.setTitle("EchoPlayer V14 - Visualizer Switcher");
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -219,22 +230,62 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   ✨ 功能1：音频可视化 (Visualizer)
+    //   ✨ 核心功能：切换视图 (黑胶 <-> 频谱)
     // ==========================================
-    private void createVisualizer() {
-        visualizerContainer = new HBox(3); // 柱子间隔 3px
-        visualizerContainer.setAlignment(Pos.BOTTOM_CENTER);
-        visualizerContainer.setPrefHeight(60); // 高度限制
-        visualizerContainer.setMinHeight(60);
+    private void toggleMainView() {
+        boolean showVisualizer = vinylRecord.isVisible(); // 如果黑胶可见，说明下一步要显示频谱
+
+        if (showVisualizer) {
+            // 切换到频谱模式
+            // 动画：黑胶淡出
+            FadeTransition ft1 = new FadeTransition(Duration.millis(300), vinylRecord);
+            ft1.setFromValue(1.0); ft1.setToValue(0.0);
+            ft1.setOnFinished(e -> vinylRecord.setVisible(false));
+            ft1.play();
+
+            // 动画：频谱淡入
+            visualizerBox.setVisible(true);
+            FadeTransition ft2 = new FadeTransition(Duration.millis(300), visualizerBox);
+            ft2.setFromValue(0.0); ft2.setToValue(1.0);
+            ft2.play();
+
+        } else {
+            // 切换回黑胶模式
+            // 动画：频谱淡出
+            FadeTransition ft1 = new FadeTransition(Duration.millis(300), visualizerBox);
+            ft1.setFromValue(1.0); ft1.setToValue(0.0);
+            ft1.setOnFinished(e -> visualizerBox.setVisible(false));
+            ft1.play();
+
+            // 动画：黑胶淡入
+            vinylRecord.setVisible(true);
+            FadeTransition ft2 = new FadeTransition(Duration.millis(300), vinylRecord);
+            ft2.setFromValue(0.0); ft2.setToValue(1.0);
+            ft2.play();
+        }
+    }
+
+    // ==========================================
+    //   ✨ 功能1：大尺寸音频可视化 (Large Visualizer)
+    // ==========================================
+    private void createLargeVisualizer() {
+        visualizerBox = new HBox(3); // 间距
+        visualizerBox.setAlignment(Pos.BOTTOM_CENTER); // 底部对齐
+        visualizerBox.setMaxSize(280, 280);
+        visualizerBox.setMinSize(280, 280);
+
+        // 增加一点内边距，防止贴边
+        visualizerBox.setPadding(new Insets(20));
 
         spectrumBars = new Rectangle[BANDS];
         for (int i = 0; i < BANDS; i++) {
-            Rectangle bar = new Rectangle(6, 2); // 宽度6，初始高度2
-            bar.setArcWidth(4); // 圆角
-            bar.setArcHeight(4);
-            bar.setFill(Color.web(currentAccentColor)); // 初始颜色
+            // 宽度设为 3，高度动态变化
+            Rectangle bar = new Rectangle(3, 5);
+            bar.setArcWidth(2);
+            bar.setArcHeight(2);
+            bar.setFill(Color.web(currentAccentColor));
             spectrumBars[i] = bar;
-            visualizerContainer.getChildren().add(bar);
+            visualizerBox.getChildren().add(bar);
         }
     }
 
@@ -246,13 +297,11 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   ✨ 功能3：搜索框 (Search Box)
+    //   搜索框
     // ==========================================
     private HBox createSearchBox() {
         HBox box = new HBox(10);
         box.setAlignment(Pos.CENTER_LEFT);
-
-        // 搜索图标
         SVGPath icon = new SVGPath();
         icon.setContent(SVG_SEARCH);
         icon.setScaleX(0.8); icon.setScaleY(0.8);
@@ -264,7 +313,6 @@ public class ModernMusicPlayer extends Application {
         searchField.setPrefWidth(200);
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
-        // 监听输入，实时过滤
         searchField.textProperty().addListener((observable, oldValue, newValue) -> {
             filteredList.setPredicate(songName -> {
                 if (newValue == null || newValue.isEmpty()) return true;
@@ -273,15 +321,13 @@ public class ModernMusicPlayer extends Application {
         });
 
         box.getChildren().addAll(icon, searchField);
-        // 底部加一条线
         box.setStyle("-fx-border-color: transparent transparent #444 transparent; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 5 0;");
         return box;
     }
 
     // ==========================================
-    //   核心播放逻辑 (包含可视化监听)
+    //   播放逻辑
     // ==========================================
-    // 修正：通过歌名播放 (用于列表点击和搜索结果)
     private void playSongByName(String name) {
         for (int i = 0; i < playList.size(); i++) {
             if (playList.get(i).getName().equals(name)) {
@@ -307,19 +353,18 @@ public class ModernMusicPlayer extends Application {
             mediaPlayer = new MediaPlayer(media);
             mediaPlayer.setVolume(volumeSlider.getValue());
 
-            // ✨✨✨ 绑定音频频谱监听器 ✨✨✨
+            // ✨ 绑定音频频谱监听 ✨
             mediaPlayer.setAudioSpectrumListener((timestamp, duration, magnitudes, phases) -> {
+                // 只有当频谱界面可见时才计算，节省资源 (可选优化，这里为了效果流畅始终计算)
                 for (int i = 0; i < BANDS && i < magnitudes.length; i++) {
-                    // magnitudes 通常在 -60 dB 到 0 dB 之间
-                    // 我们将其标准化为高度
                     double mag = magnitudes[i] + 60;
                     if (mag < 0) mag = 0;
-                    double height = mag * 1.5 + 2; // 缩放系数 + 最小高度
+                    // 缩放系数加大 (4.0)，因为现在的区域有 280px 高
+                    double height = mag * 4.0 + 5;
                     spectrumBars[i].setHeight(height);
                 }
             });
-            // 设置刷新间隔 (默认0.1秒，这里设快一点 0.05秒更流畅)
-            mediaPlayer.setAudioSpectrumInterval(0.05);
+            mediaPlayer.setAudioSpectrumInterval(0.04); // 刷新率更丝滑
 
             mediaPlayer.play();
             vinylRecord.setRotate(0); rotateAnimation.playFromStart();
@@ -339,54 +384,41 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   ✨ 功能2：右键菜单 (Context Menu)
+    //   右键菜单
     // ==========================================
     private ContextMenu createContextMenu(String item) {
         ContextMenu cm = new ContextMenu();
-
-        // 播放
         MenuItem playItem = new MenuItem("▶ Play");
         playItem.setOnAction(e -> playSongByName(item));
 
-        // 打开文件位置
         MenuItem openItem = new MenuItem("📂 Open File Location");
         openItem.setOnAction(e -> {
             for (File f : playList) {
                 if (f.getName().equals(item)) {
-                    try {
-                        Desktop.getDesktop().open(f.getParentFile());
-                    } catch (Exception ex) { ex.printStackTrace(); }
+                    try { Desktop.getDesktop().open(f.getParentFile()); } catch (Exception ex) { ex.printStackTrace(); }
                     break;
                 }
             }
         });
 
-        // 移除
         MenuItem deleteItem = new MenuItem("🗑 Remove from Library");
         deleteItem.setOnAction(e -> {
-            // 从 UI 列表删除
             listModel.remove(item);
-            // 从后台数据源删除
             playList.removeIf(f -> f.getName().equals(item));
-            // 如果删的是正在放的，停止
             if (titleLabel.getText().equals(item.replace(".mp3", ""))) {
                 if (mediaPlayer != null) mediaPlayer.stop();
-                titleLabel.setText("EchoPlayer");
-                artistLabel.setText("Stopped");
-                updatePlayButtonIconStyle(false);
-                rotateAnimation.stop();
+                titleLabel.setText("EchoPlayer"); artistLabel.setText("Stopped");
+                updatePlayButtonIconStyle(false); rotateAnimation.stop();
             }
         });
 
-        // 样式化菜单
         cm.setStyle("-fx-background-color: #333; -fx-text-fill: white;");
-
         cm.getItems().addAll(playItem, openItem, new SeparatorMenuItem(), deleteItem);
         return cm;
     }
 
     // ==========================================
-    //   UI 辅助与样式
+    //   UI 辅助
     // ==========================================
     private void applyTheme(String themeName) {
         String bgRoot, bgLeft, textMain, textSub, accentColor, sliderTrack;
@@ -441,9 +473,7 @@ public class ModernMusicPlayer extends Application {
         timeLabel.setTextFill(Color.web(textSub));
         volIcon.setTextFill(Color.web(textSub));
 
-        // 更新可视化颜色
         updateVisualizerColor(accentColor);
-        // 更新搜索框样式
         if (searchField != null) {
             String promptColor = isLightMode ? "#999" : "#666";
             searchField.setStyle("-fx-background-color: transparent; -fx-text-fill: " + textMain + "; -fx-prompt-text-fill: " + promptColor + ";");
@@ -493,13 +523,12 @@ public class ModernMusicPlayer extends Application {
 
                 if (empty || item == null) {
                     setText(null); setGraphic(null); setStyle("-fx-background-color: transparent;");
-                    setContextMenu(null); // 清除菜单
+                    setContextMenu(null);
                 } else {
                     setText(null); text1.setText(item); text2.setText(item);
                     text1.setFill(Color.web(finalMainText)); text2.setFill(Color.web(finalMainText));
                     setGraphic(container);
 
-                    // ✨✨✨ 设置右键菜单 ✨✨✨
                     setContextMenu(createContextMenu(item));
 
                     String baseStyle = "-fx-padding: 8 15 8 15; -fx-background-radius: 8;";
@@ -534,7 +563,6 @@ public class ModernMusicPlayer extends Application {
         });
         playlistView.refresh();
 
-        // 修复下拉框背景
         themeSelector.setStyle("-fx-background-color: " + comboBg + "; -fx-text-fill: " + comboText + "; -fx-border-color: " + comboBorder + "; -fx-background-radius: 6; -fx-border-radius: 6;");
         final String fComboBg = comboBg; final String fComboText = comboText; final String fComboHover = comboHover;
         themeSelector.setButtonCell(new ListCell<String>() {
@@ -571,12 +599,6 @@ public class ModernMusicPlayer extends Application {
         updateButtonStyle(btnMode, textMain, accentColor, isLightMode);
         updateVinylStyle(themeName);
     }
-
-    // ... 其他常规方法 (createSvgButton, updatePlayButtonIconStyle, updateButtonStyle, addHoverAnimation, updateVinylStyle, createVinylRecord, togglePlayMode, updateModeButtonText, playNextSong, playPrev) ...
-
-    // 为了节省篇幅，这里折叠了未改动的辅助方法。
-    // 如果你全选复制，确保下面的辅助方法与之前 V12 版本一致。
-    // ✨ 这里我补全它们以确保你可以直接运行 ✨
 
     private Button createSvgButton(String svgContent) {
         Button btn = new Button();
@@ -650,7 +672,7 @@ public class ModernMusicPlayer extends Application {
     private void togglePlay() {
         if (mediaPlayer == null && !playList.isEmpty()) {
             if (filteredList.isEmpty()) return;
-            playSongByName(filteredList.get(0)); // 默认放筛选后的第一首
+            playSongByName(filteredList.get(0));
         } else if (mediaPlayer != null) {
             if (mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
                 mediaPlayer.pause(); rotateAnimation.pause();
@@ -739,7 +761,6 @@ public class ModernMusicPlayer extends Application {
     }
 
     private void addToPlaylistSafe(File file) {
-        // 使用文件名作为唯一标识，添加到数据源和 UI 列表
         if (playList.stream().noneMatch(f -> f.getName().equals(file.getName()))) {
             playList.add(file);
             listModel.add(file.getName());
