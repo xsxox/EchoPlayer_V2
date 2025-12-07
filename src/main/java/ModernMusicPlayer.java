@@ -14,6 +14,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
+import javafx.scene.effect.Reflection;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
@@ -80,11 +81,11 @@ public class ModernMusicPlayer extends Application {
     private Label volIcon;
     private ComboBox<String> themeSelector;
 
-    // ✨ 核心显示区 (用于切换黑胶/频谱)
+    // ✨ 核心显示区 (切换黑胶/倒影频谱)
     private StackPane centerDisplayArea;
-    private HBox visualizerBox;
+    private HBox visualizerBox; // 改回 HBox 以便底部对齐
     private Rectangle[] spectrumBars;
-    private static final int BANDS = 60; // 增加频谱数量，使其更细腻
+    private static final int BANDS = 50; // 50根柱子
 
     private String currentPlayBtnStyleBase = "";
     private String currentAccentColor = "#1DB954";
@@ -142,23 +143,21 @@ public class ModernMusicPlayer extends Application {
         centerPanel.setAlignment(Pos.CENTER);
         centerPanel.setPadding(new Insets(30, 40, 30, 40));
 
-        // ✨✨✨ 1. 创建显示区域 (可切换) ✨✨✨
+        // ✨ 1. 创建显示区域 (可切换)
         centerDisplayArea = new StackPane();
         centerDisplayArea.setMaxSize(280, 280);
         centerDisplayArea.setMinSize(280, 280);
-        centerDisplayArea.setStyle("-fx-cursor: hand;"); // 手型鼠标，提示可点击
-        // 点击切换视图
+        centerDisplayArea.setStyle("-fx-cursor: hand;");
         centerDisplayArea.setOnMouseClicked(e -> toggleMainView());
 
         // 创建黑胶
         createVinylRecord();
 
-        // 创建大尺寸频谱 (默认隐藏)
-        createLargeVisualizer();
+        // 创建倒影频谱 (默认隐藏)
+        createSkylineVisualizer();
         visualizerBox.setVisible(false);
         visualizerBox.setOpacity(0);
 
-        // 将两者叠放在一起
         centerDisplayArea.getChildren().addAll(vinylRecord, visualizerBox);
 
         // 2. 信息
@@ -166,7 +165,7 @@ public class ModernMusicPlayer extends Application {
         infoBox.setAlignment(Pos.CENTER);
         titleLabel = new Label("EchoPlayer");
         titleLabel.setFont(Font.font("Microsoft YaHei", FontWeight.BOLD, 28));
-        artistLabel = new Label("Click Disc to Switch Mode"); // 提示用户
+        artistLabel = new Label("Click Disc to Switch Mode");
         artistLabel.setFont(Font.font("Microsoft YaHei", FontWeight.NORMAL, 16));
         infoBox.getChildren().addAll(titleLabel, artistLabel);
 
@@ -199,7 +198,6 @@ public class ModernMusicPlayer extends Application {
         bottomBar.setAlignment(Pos.CENTER);
         bottomBar.getChildren().addAll(controls, volBox);
 
-        // 这里不再直接添加 vinylRecord，而是添加 centerDisplayArea
         centerPanel.getChildren().addAll(centerDisplayArea, infoBox, progressBox, bottomBar);
         root.setCenter(centerPanel);
 
@@ -221,7 +219,7 @@ public class ModernMusicPlayer extends Application {
         hideScrollBars(scene);
         applyTheme("🌑 Classic Dark");
 
-        primaryStage.setTitle("EchoPlayer V14 - Visualizer Switcher");
+        primaryStage.setTitle("EchoPlayer V17 - Skyline Reflection");
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -230,34 +228,32 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   ✨ 核心功能：切换视图 (黑胶 <-> 频谱)
+    //   ✨ 核心功能：切换视图
     // ==========================================
     private void toggleMainView() {
-        boolean showVisualizer = vinylRecord.isVisible(); // 如果黑胶可见，说明下一步要显示频谱
+        boolean showVisualizer = vinylRecord.isVisible();
 
         if (showVisualizer) {
-            // 切换到频谱模式
-            // 动画：黑胶淡出
+            // 黑胶淡出
             FadeTransition ft1 = new FadeTransition(Duration.millis(300), vinylRecord);
             ft1.setFromValue(1.0); ft1.setToValue(0.0);
             ft1.setOnFinished(e -> vinylRecord.setVisible(false));
             ft1.play();
 
-            // 动画：频谱淡入
+            // 频谱淡入
             visualizerBox.setVisible(true);
             FadeTransition ft2 = new FadeTransition(Duration.millis(300), visualizerBox);
             ft2.setFromValue(0.0); ft2.setToValue(1.0);
             ft2.play();
 
         } else {
-            // 切换回黑胶模式
-            // 动画：频谱淡出
+            // 频谱淡出
             FadeTransition ft1 = new FadeTransition(Duration.millis(300), visualizerBox);
             ft1.setFromValue(1.0); ft1.setToValue(0.0);
             ft1.setOnFinished(e -> visualizerBox.setVisible(false));
             ft1.play();
 
-            // 动画：黑胶淡入
+            // 黑胶淡入
             vinylRecord.setVisible(true);
             FadeTransition ft2 = new FadeTransition(Duration.millis(300), vinylRecord);
             ft2.setFromValue(0.0); ft2.setToValue(1.0);
@@ -266,23 +262,29 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   ✨ 功能1：大尺寸音频可视化 (Large Visualizer)
+    //   ✨ 方案C：Skyline 倒影频谱
     // ==========================================
-    private void createLargeVisualizer() {
-        visualizerBox = new HBox(3); // 间距
+    private void createSkylineVisualizer() {
+        visualizerBox = new HBox(3); // 柱子间隔 3px
         visualizerBox.setAlignment(Pos.BOTTOM_CENTER); // 底部对齐
         visualizerBox.setMaxSize(280, 280);
         visualizerBox.setMinSize(280, 280);
+        visualizerBox.setPadding(new Insets(0, 0, 40, 0)); // 底部留白，给倒影空间
 
-        // 增加一点内边距，防止贴边
-        visualizerBox.setPadding(new Insets(20));
+        // ✨✨✨ 魔法：倒影特效 ✨✨✨
+        // 让频谱下方出现一个半透明的镜像，瞬间提升高级感
+        Reflection reflection = new Reflection();
+        reflection.setFraction(0.4); // 倒影高度比例
+        reflection.setTopOpacity(0.3); // 倒影起始透明度
+        reflection.setBottomOpacity(0.0); // 倒影结束透明度
+        visualizerBox.setEffect(reflection);
 
         spectrumBars = new Rectangle[BANDS];
         for (int i = 0; i < BANDS; i++) {
-            // 宽度设为 3，高度动态变化
-            Rectangle bar = new Rectangle(3, 5);
-            bar.setArcWidth(2);
-            bar.setArcHeight(2);
+            // 宽度4，圆角4 -> 胶囊形状
+            Rectangle bar = new Rectangle(4, 5);
+            bar.setArcWidth(4);
+            bar.setArcHeight(4);
             bar.setFill(Color.web(currentAccentColor));
             spectrumBars[i] = bar;
             visualizerBox.getChildren().add(bar);
@@ -353,18 +355,21 @@ public class ModernMusicPlayer extends Application {
             mediaPlayer = new MediaPlayer(media);
             mediaPlayer.setVolume(volumeSlider.getValue());
 
-            // ✨ 绑定音频频谱监听 ✨
+            // ✨ 绑定柱状频谱律动 ✨
             mediaPlayer.setAudioSpectrumListener((timestamp, duration, magnitudes, phases) -> {
-                // 只有当频谱界面可见时才计算，节省资源 (可选优化，这里为了效果流畅始终计算)
                 for (int i = 0; i < BANDS && i < magnitudes.length; i++) {
                     double mag = magnitudes[i] + 60;
                     if (mag < 0) mag = 0;
-                    // 缩放系数加大 (4.0)，因为现在的区域有 280px 高
-                    double height = mag * 4.0 + 5;
+
+                    // 计算高度 (最大 220，留空间给倒影)
+                    double height = mag * 3.0 + 5;
+                    // 简单的平滑限制，防止超出容器
+                    if(height > 220) height = 220;
+
                     spectrumBars[i].setHeight(height);
                 }
             });
-            mediaPlayer.setAudioSpectrumInterval(0.04); // 刷新率更丝滑
+            mediaPlayer.setAudioSpectrumInterval(0.04);
 
             mediaPlayer.play();
             vinylRecord.setRotate(0); rotateAnimation.playFromStart();
@@ -528,7 +533,6 @@ public class ModernMusicPlayer extends Application {
                     setText(null); text1.setText(item); text2.setText(item);
                     text1.setFill(Color.web(finalMainText)); text2.setFill(Color.web(finalMainText));
                     setGraphic(container);
-
                     setContextMenu(createContextMenu(item));
 
                     String baseStyle = "-fx-padding: 8 15 8 15; -fx-background-radius: 8;";
