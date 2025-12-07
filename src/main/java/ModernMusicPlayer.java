@@ -83,9 +83,9 @@ public class ModernMusicPlayer extends Application {
 
     // ✨ 核心显示区 (切换黑胶/倒影频谱)
     private StackPane centerDisplayArea;
-    private HBox visualizerBox; // 改回 HBox 以便底部对齐
+    private HBox visualizerBox;
     private Rectangle[] spectrumBars;
-    private static final int BANDS = 50; // 50根柱子
+    private static final int BANDS = 50;
 
     private String currentPlayBtnStyleBase = "";
     private String currentAccentColor = "#1DB954";
@@ -143,21 +143,17 @@ public class ModernMusicPlayer extends Application {
         centerPanel.setAlignment(Pos.CENTER);
         centerPanel.setPadding(new Insets(30, 40, 30, 40));
 
-        // ✨ 1. 创建显示区域 (可切换)
+        // 1. 创建显示区域 (可切换)
         centerDisplayArea = new StackPane();
         centerDisplayArea.setMaxSize(280, 280);
         centerDisplayArea.setMinSize(280, 280);
         centerDisplayArea.setStyle("-fx-cursor: hand;");
         centerDisplayArea.setOnMouseClicked(e -> toggleMainView());
 
-        // 创建黑胶
         createVinylRecord();
-
-        // 创建倒影频谱 (默认隐藏)
         createSkylineVisualizer();
         visualizerBox.setVisible(false);
         visualizerBox.setOpacity(0);
-
         centerDisplayArea.getChildren().addAll(vinylRecord, visualizerBox);
 
         // 2. 信息
@@ -217,217 +213,64 @@ public class ModernMusicPlayer extends Application {
 
         setupDragAndDrop(scene);
         hideScrollBars(scene);
-        applyTheme("🌑 Classic Dark");
 
-        primaryStage.setTitle("EchoPlayer V17 - Skyline Reflection");
+        // ✨✨✨ 关键修改：先设置 Scene，再应用主题，确保 CSS 能注入到 Scene 中 ✨✨✨
+        primaryStage.setTitle("EchoPlayer V18 - Perfect Context Menu");
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        // 放在最后调用，确保 Scene 已经存在
+        applyTheme("🌑 Classic Dark");
 
         loadProjectMusic();
         loadSavedPlaylist();
     }
 
     // ==========================================
-    //   ✨ 核心功能：切换视图
+    //   ✨ 修复：动态生成右键菜单 CSS
     // ==========================================
-    private void toggleMainView() {
-        boolean showVisualizer = vinylRecord.isVisible();
+    private void updateThemeCss(Scene scene, String menuBg, String menuText, String menuHover, String menuBorder) {
+        if (scene == null) return;
 
-        if (showVisualizer) {
-            // 黑胶淡出
-            FadeTransition ft1 = new FadeTransition(Duration.millis(300), vinylRecord);
-            ft1.setFromValue(1.0); ft1.setToValue(0.0);
-            ft1.setOnFinished(e -> vinylRecord.setVisible(false));
-            ft1.play();
-
-            // 频谱淡入
-            visualizerBox.setVisible(true);
-            FadeTransition ft2 = new FadeTransition(Duration.millis(300), visualizerBox);
-            ft2.setFromValue(0.0); ft2.setToValue(1.0);
-            ft2.play();
-
-        } else {
-            // 频谱淡出
-            FadeTransition ft1 = new FadeTransition(Duration.millis(300), visualizerBox);
-            ft1.setFromValue(1.0); ft1.setToValue(0.0);
-            ft1.setOnFinished(e -> visualizerBox.setVisible(false));
-            ft1.play();
-
-            // 黑胶淡入
-            vinylRecord.setVisible(true);
-            FadeTransition ft2 = new FadeTransition(Duration.millis(300), vinylRecord);
-            ft2.setFromValue(0.0); ft2.setToValue(1.0);
-            ft2.play();
-        }
-    }
-
-    // ==========================================
-    //   ✨ 方案C：Skyline 倒影频谱
-    // ==========================================
-    private void createSkylineVisualizer() {
-        visualizerBox = new HBox(3); // 柱子间隔 3px
-        visualizerBox.setAlignment(Pos.BOTTOM_CENTER); // 底部对齐
-        visualizerBox.setMaxSize(280, 280);
-        visualizerBox.setMinSize(280, 280);
-        visualizerBox.setPadding(new Insets(0, 0, 40, 0)); // 底部留白，给倒影空间
-
-        // ✨✨✨ 魔法：倒影特效 ✨✨✨
-        // 让频谱下方出现一个半透明的镜像，瞬间提升高级感
-        Reflection reflection = new Reflection();
-        reflection.setFraction(0.4); // 倒影高度比例
-        reflection.setTopOpacity(0.3); // 倒影起始透明度
-        reflection.setBottomOpacity(0.0); // 倒影结束透明度
-        visualizerBox.setEffect(reflection);
-
-        spectrumBars = new Rectangle[BANDS];
-        for (int i = 0; i < BANDS; i++) {
-            // 宽度4，圆角4 -> 胶囊形状
-            Rectangle bar = new Rectangle(4, 5);
-            bar.setArcWidth(4);
-            bar.setArcHeight(4);
-            bar.setFill(Color.web(currentAccentColor));
-            spectrumBars[i] = bar;
-            visualizerBox.getChildren().add(bar);
-        }
-    }
-
-    private void updateVisualizerColor(String color) {
-        currentAccentColor = color;
-        if (spectrumBars != null) {
-            for (Rectangle bar : spectrumBars) bar.setFill(Color.web(color));
-        }
-    }
-
-    // ==========================================
-    //   搜索框
-    // ==========================================
-    private HBox createSearchBox() {
-        HBox box = new HBox(10);
-        box.setAlignment(Pos.CENTER_LEFT);
-        SVGPath icon = new SVGPath();
-        icon.setContent(SVG_SEARCH);
-        icon.setScaleX(0.8); icon.setScaleY(0.8);
-        icon.setFill(Color.web("#888"));
-
-        searchField = new TextField();
-        searchField.setPromptText("Search library...");
-        searchField.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-prompt-text-fill: #666;");
-        searchField.setPrefWidth(200);
-        HBox.setHgrow(searchField, Priority.ALWAYS);
-
-        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
-            filteredList.setPredicate(songName -> {
-                if (newValue == null || newValue.isEmpty()) return true;
-                return songName.toLowerCase().contains(newValue.toLowerCase());
-            });
-        });
-
-        box.getChildren().addAll(icon, searchField);
-        box.setStyle("-fx-border-color: transparent transparent #444 transparent; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 5 0;");
-        return box;
-    }
-
-    // ==========================================
-    //   播放逻辑
-    // ==========================================
-    private void playSongByName(String name) {
-        for (int i = 0; i < playList.size(); i++) {
-            if (playList.get(i).getName().equals(name)) {
-                playSong(i);
-                return;
-            }
-        }
-    }
-
-    private void playSong(int index) {
-        if (index < 0 || index >= playList.size()) return;
-        if (mediaPlayer != null) { mediaPlayer.stop(); mediaPlayer.dispose(); }
-
-        currentIndex = index;
-        File file = playList.get(index);
-
-        titleLabel.setText(file.getName().replace(".mp3", ""));
-        artistLabel.setText("Now Playing");
-        updatePlayButtonIconStyle(true);
+        String css =
+                // 菜单整体
+                ".context-menu {" +
+                        "    -fx-background-color: " + menuBg + ";" +
+                        "    -fx-background-radius: 8;" +
+                        "    -fx-border-radius: 8;" +
+                        "    -fx-border-color: " + menuBorder + ";" +
+                        "    -fx-border-width: 1;" +
+                        "    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 10, 0, 0, 4);" +
+                        "}" +
+                        // 菜单项文字
+                        ".menu-item .label {" +
+                        "    -fx-text-fill: " + menuText + ";" +
+                        "}" +
+                        // 选中/悬停背景
+                        ".menu-item:focused {" +
+                        "    -fx-background-color: " + menuHover + ";" +
+                        "}" +
+                        // 选中/悬停文字
+                        ".menu-item:focused .label {" +
+                        "    -fx-text-fill: " + menuText + ";" +
+                        "}";
 
         try {
-            Media media = new Media(file.toURI().toString());
-            mediaPlayer = new MediaPlayer(media);
-            mediaPlayer.setVolume(volumeSlider.getValue());
-
-            // ✨ 绑定柱状频谱律动 ✨
-            mediaPlayer.setAudioSpectrumListener((timestamp, duration, magnitudes, phases) -> {
-                for (int i = 0; i < BANDS && i < magnitudes.length; i++) {
-                    double mag = magnitudes[i] + 60;
-                    if (mag < 0) mag = 0;
-
-                    // 计算高度 (最大 220，留空间给倒影)
-                    double height = mag * 3.0 + 5;
-                    // 简单的平滑限制，防止超出容器
-                    if(height > 220) height = 220;
-
-                    spectrumBars[i].setHeight(height);
-                }
-            });
-            mediaPlayer.setAudioSpectrumInterval(0.04);
-
-            mediaPlayer.play();
-            vinylRecord.setRotate(0); rotateAnimation.playFromStart();
-
-            mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
-                if (!progressSlider.isValueChanging()) {
-                    progressSlider.setValue((newT.toMillis() / media.getDuration().toMillis()) * 100);
-                }
-                timeLabel.setText(formatTime(newT) + " / " + formatTime(media.getDuration()));
-            });
-
-            mediaPlayer.setOnEndOfMedia(this::playNextSong);
-
+            String base64Css = Base64.getEncoder().encodeToString(css.getBytes("UTF-8"));
+            scene.getStylesheets().add("data:text/css;base64," + base64Css);
         } catch (Exception e) {
-            artistLabel.setText("Load Error");
+            e.printStackTrace();
         }
     }
 
     // ==========================================
-    //   右键菜单
-    // ==========================================
-    private ContextMenu createContextMenu(String item) {
-        ContextMenu cm = new ContextMenu();
-        MenuItem playItem = new MenuItem("▶ Play");
-        playItem.setOnAction(e -> playSongByName(item));
-
-        MenuItem openItem = new MenuItem("📂 Open File Location");
-        openItem.setOnAction(e -> {
-            for (File f : playList) {
-                if (f.getName().equals(item)) {
-                    try { Desktop.getDesktop().open(f.getParentFile()); } catch (Exception ex) { ex.printStackTrace(); }
-                    break;
-                }
-            }
-        });
-
-        MenuItem deleteItem = new MenuItem("🗑 Remove from Library");
-        deleteItem.setOnAction(e -> {
-            listModel.remove(item);
-            playList.removeIf(f -> f.getName().equals(item));
-            if (titleLabel.getText().equals(item.replace(".mp3", ""))) {
-                if (mediaPlayer != null) mediaPlayer.stop();
-                titleLabel.setText("EchoPlayer"); artistLabel.setText("Stopped");
-                updatePlayButtonIconStyle(false); rotateAnimation.stop();
-            }
-        });
-
-        cm.setStyle("-fx-background-color: #333; -fx-text-fill: white;");
-        cm.getItems().addAll(playItem, openItem, new SeparatorMenuItem(), deleteItem);
-        return cm;
-    }
-
-    // ==========================================
-    //   UI 辅助
+    //   UI 样式与主题
     // ==========================================
     private void applyTheme(String themeName) {
         String bgRoot, bgLeft, textMain, textSub, accentColor, sliderTrack;
         String comboBg, comboText, comboBorder, comboHover;
+        // 新增菜单变量
+        String menuBg, menuText, menuHover, menuBorder;
         String playBtnStyle;
 
         boolean isLightMode = false;
@@ -440,6 +283,8 @@ public class ModernMusicPlayer extends Application {
                 bgLeft = "rgba(245, 245, 247, 0.8)";
                 textMain = "#1C1C1E"; textSub = "#8E8E93"; accentColor = "#FA2D48";
                 sliderTrack = "#E5E5EA"; comboBg = "#FFFFFF"; comboText = "#1C1C1E"; comboBorder = "#D1D1D6"; comboHover = "#F2F2F7";
+                // 菜单配色 (白底黑字)
+                menuBg = "#FFFFFF"; menuText = "#000000"; menuHover = "#F2F2F7"; menuBorder = "#D1D1D6";
                 playBtnStyle = "-fx-background-color: linear-gradient(to bottom right, #FF2D55, #FF5E3A); -fx-text-fill: white;";
                 isLightMode = true; break;
 
@@ -448,6 +293,8 @@ public class ModernMusicPlayer extends Application {
                 bgLeft = "#000000";
                 textMain = "#FFFFFF"; textSub = "#B3B3B3"; accentColor = "#1DB954";
                 sliderTrack = "#404040"; comboBg = "#282828"; comboText = "#FFFFFF"; comboBorder = "#404040"; comboHover = "#3E3E3E";
+                // 菜单配色 (深灰底白字)
+                menuBg = "#282828"; menuText = "#FFFFFF"; menuHover = "#404040"; menuBorder = "#333333";
                 playBtnStyle = "-fx-background-color: #FFFFFF; -fx-text-fill: #000000;";
                 break;
 
@@ -456,6 +303,8 @@ public class ModernMusicPlayer extends Application {
                 bgLeft = "#13132b";
                 textMain = "#00f3ff"; textSub = "#ff0099"; accentColor = "#00f3ff";
                 sliderTrack = "#2a2a40"; comboBg = "#2a2a40"; comboText = "#00f3ff"; comboBorder = "#ff0099"; comboHover = "#3d3d5c";
+                // 菜单配色 (蓝黑底，霓虹字，粉边框)
+                menuBg = "#1a1a3d"; menuText = "#00f3ff"; menuHover = "#ff0099"; menuBorder = "#00f3ff";
                 playBtnStyle = "-fx-background-color: #00f3ff; -fx-text-fill: #000000;";
                 isCyberpunk = true; break;
 
@@ -465,18 +314,25 @@ public class ModernMusicPlayer extends Application {
                 bgLeft = "#0f172a";
                 textMain = "#e0f2fe"; textSub = "#94a3b8"; accentColor = "#38bdf8";
                 sliderTrack = "#334155"; comboBg = "#1e293b"; comboText = "#ffffff"; comboBorder = "#38bdf8"; comboHover = "#334155";
+                // 菜单配色 (深蓝底白字)
+                menuBg = "#1e293b"; menuText = "#e0f2fe"; menuHover = "#334155"; menuBorder = "#38bdf8";
                 playBtnStyle = "-fx-background-color: #38bdf8; -fx-text-fill: #000000;";
                 isDynamicBlue = true; break;
         }
 
+        // 应用基础颜色
         root.setStyle("-fx-background-color: " + bgRoot + ";");
         leftPanel.setStyle("-fx-background-color: " + bgLeft + "; -fx-border-color: transparent;");
-
         listTitle.setTextFill(Color.web(accentColor));
         titleLabel.setTextFill(Color.web(textMain));
         artistLabel.setTextFill(Color.web(textSub));
         timeLabel.setTextFill(Color.web(textSub));
         volIcon.setTextFill(Color.web(textSub));
+
+        // ✨ 注入右键菜单 CSS ✨
+        if (root.getScene() != null) {
+            updateThemeCss(root.getScene(), menuBg, menuText, menuHover, menuBorder);
+        }
 
         updateVisualizerColor(accentColor);
         if (searchField != null) {
@@ -604,6 +460,190 @@ public class ModernMusicPlayer extends Application {
         updateVinylStyle(themeName);
     }
 
+    // ==========================================
+    //   核心功能：切换视图
+    // ==========================================
+    private void toggleMainView() {
+        boolean showVisualizer = vinylRecord.isVisible();
+        if (showVisualizer) {
+            FadeTransition ft1 = new FadeTransition(Duration.millis(300), vinylRecord);
+            ft1.setFromValue(1.0); ft1.setToValue(0.0);
+            ft1.setOnFinished(e -> vinylRecord.setVisible(false));
+            ft1.play();
+            visualizerBox.setVisible(true);
+            FadeTransition ft2 = new FadeTransition(Duration.millis(300), visualizerBox);
+            ft2.setFromValue(0.0); ft2.setToValue(1.0);
+            ft2.play();
+        } else {
+            FadeTransition ft1 = new FadeTransition(Duration.millis(300), visualizerBox);
+            ft1.setFromValue(1.0); ft1.setToValue(0.0);
+            ft1.setOnFinished(e -> visualizerBox.setVisible(false));
+            ft1.play();
+            vinylRecord.setVisible(true);
+            FadeTransition ft2 = new FadeTransition(Duration.millis(300), vinylRecord);
+            ft2.setFromValue(0.0); ft2.setToValue(1.0);
+            ft2.play();
+        }
+    }
+
+    // ==========================================
+    //   Skyline 倒影频谱
+    // ==========================================
+    private void createSkylineVisualizer() {
+        visualizerBox = new HBox(3);
+        visualizerBox.setAlignment(Pos.BOTTOM_CENTER);
+        visualizerBox.setMaxSize(280, 280);
+        visualizerBox.setMinSize(280, 280);
+        visualizerBox.setPadding(new Insets(0, 0, 40, 0));
+
+        Reflection reflection = new Reflection();
+        reflection.setFraction(0.4);
+        reflection.setTopOpacity(0.3);
+        reflection.setBottomOpacity(0.0);
+        visualizerBox.setEffect(reflection);
+
+        spectrumBars = new Rectangle[BANDS];
+        for (int i = 0; i < BANDS; i++) {
+            Rectangle bar = new Rectangle(4, 5);
+            bar.setArcWidth(4);
+            bar.setArcHeight(4);
+            bar.setFill(Color.web(currentAccentColor));
+            spectrumBars[i] = bar;
+            visualizerBox.getChildren().add(bar);
+        }
+    }
+
+    private void updateVisualizerColor(String color) {
+        currentAccentColor = color;
+        if (spectrumBars != null) {
+            for (Rectangle bar : spectrumBars) bar.setFill(Color.web(color));
+        }
+    }
+
+    // ==========================================
+    //   搜索框
+    // ==========================================
+    private HBox createSearchBox() {
+        HBox box = new HBox(10);
+        box.setAlignment(Pos.CENTER_LEFT);
+        SVGPath icon = new SVGPath();
+        icon.setContent(SVG_SEARCH);
+        icon.setScaleX(0.8); icon.setScaleY(0.8);
+        icon.setFill(Color.web("#888"));
+
+        searchField = new TextField();
+        searchField.setPromptText("Search library...");
+        searchField.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-prompt-text-fill: #666;");
+        searchField.setPrefWidth(200);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            filteredList.setPredicate(songName -> {
+                if (newValue == null || newValue.isEmpty()) return true;
+                return songName.toLowerCase().contains(newValue.toLowerCase());
+            });
+        });
+
+        box.getChildren().addAll(icon, searchField);
+        box.setStyle("-fx-border-color: transparent transparent #444 transparent; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 5 0;");
+        return box;
+    }
+
+    // ==========================================
+    //   播放逻辑
+    // ==========================================
+    private void playSongByName(String name) {
+        for (int i = 0; i < playList.size(); i++) {
+            if (playList.get(i).getName().equals(name)) {
+                playSong(i);
+                return;
+            }
+        }
+    }
+
+    private void playSong(int index) {
+        if (index < 0 || index >= playList.size()) return;
+        if (mediaPlayer != null) { mediaPlayer.stop(); mediaPlayer.dispose(); }
+
+        currentIndex = index;
+        File file = playList.get(index);
+
+        titleLabel.setText(file.getName().replace(".mp3", ""));
+        artistLabel.setText("Now Playing");
+        updatePlayButtonIconStyle(true);
+
+        try {
+            Media media = new Media(file.toURI().toString());
+            mediaPlayer = new MediaPlayer(media);
+            mediaPlayer.setVolume(volumeSlider.getValue());
+
+            mediaPlayer.setAudioSpectrumListener((timestamp, duration, magnitudes, phases) -> {
+                for (int i = 0; i < BANDS && i < magnitudes.length; i++) {
+                    double mag = magnitudes[i] + 60;
+                    if (mag < 0) mag = 0;
+                    double height = mag * 3.0 + 5;
+                    if(height > 220) height = 220;
+                    spectrumBars[i].setHeight(height);
+                }
+            });
+            mediaPlayer.setAudioSpectrumInterval(0.04);
+
+            mediaPlayer.play();
+            vinylRecord.setRotate(0); rotateAnimation.playFromStart();
+
+            mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
+                if (!progressSlider.isValueChanging()) {
+                    progressSlider.setValue((newT.toMillis() / media.getDuration().toMillis()) * 100);
+                }
+                timeLabel.setText(formatTime(newT) + " / " + formatTime(media.getDuration()));
+            });
+
+            mediaPlayer.setOnEndOfMedia(this::playNextSong);
+
+        } catch (Exception e) {
+            artistLabel.setText("Load Error");
+        }
+    }
+
+    // ==========================================
+    //   右键菜单 (移除旧的 hardcoded style)
+    // ==========================================
+    private ContextMenu createContextMenu(String item) {
+        ContextMenu cm = new ContextMenu();
+        MenuItem playItem = new MenuItem("▶ Play");
+        playItem.setOnAction(e -> playSongByName(item));
+
+        MenuItem openItem = new MenuItem("📂 Open File Location");
+        openItem.setOnAction(e -> {
+            for (File f : playList) {
+                if (f.getName().equals(item)) {
+                    try { Desktop.getDesktop().open(f.getParentFile()); } catch (Exception ex) { ex.printStackTrace(); }
+                    break;
+                }
+            }
+        });
+
+        MenuItem deleteItem = new MenuItem("🗑 Remove from Library");
+        deleteItem.setOnAction(e -> {
+            listModel.remove(item);
+            playList.removeIf(f -> f.getName().equals(item));
+            if (titleLabel.getText().equals(item.replace(".mp3", ""))) {
+                if (mediaPlayer != null) mediaPlayer.stop();
+                titleLabel.setText("EchoPlayer"); artistLabel.setText("Stopped");
+                updatePlayButtonIconStyle(false); rotateAnimation.stop();
+            }
+        });
+
+        // ❌ 删除旧的硬编码样式
+        // cm.setStyle("-fx-background-color: #333; -fx-text-fill: white;");
+
+        cm.getItems().addAll(playItem, openItem, new SeparatorMenuItem(), deleteItem);
+        return cm;
+    }
+
+    // ==========================================
+    //   其他辅助方法
+    // ==========================================
     private Button createSvgButton(String svgContent) {
         Button btn = new Button();
         SVGPath svg = new SVGPath();
