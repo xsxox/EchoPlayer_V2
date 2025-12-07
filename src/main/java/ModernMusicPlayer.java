@@ -24,6 +24,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 public class ModernMusicPlayer extends Application {
@@ -49,12 +50,16 @@ public class ModernMusicPlayer extends Application {
     private Label volIcon;
     private ComboBox<String> themeSelector;
 
+    // --- 样式状态变量 ---
+    // 用来暂存播放按钮的基础样式（颜色、阴影），以便动态调整字体大小时不丢失背景
+    private String currentPlayBtnStyleBase = "";
+
     // --- 黑胶组件 ---
     private StackPane vinylRecord;
     private Circle disc;
     private Circle labelCenter;
     private Text vinylText;
-    private javafx.animation.RotateTransition rotateAnimation;
+    private RotateTransition rotateAnimation;
 
     @Override
     public void start(Stage primaryStage) {
@@ -63,7 +68,7 @@ public class ModernMusicPlayer extends Application {
         // --- 左侧 ---
         leftPanel = new VBox(15);
         leftPanel.setPadding(new Insets(25));
-        leftPanel.setPrefWidth(260);
+        leftPanel.setPrefWidth(280);
 
         listTitle = new Label("LIBRARY");
         listTitle.setFont(Font.font("Verdana", FontWeight.BOLD, 13));
@@ -81,13 +86,13 @@ public class ModernMusicPlayer extends Application {
 
         btnAdd = new Button("➕ IMPORT TRACKS");
         btnAdd.setMaxWidth(Double.MAX_VALUE);
-        btnAdd.setPrefHeight(40);
+        btnAdd.setPrefHeight(45);
         btnAdd.setOnAction(e -> addMusic(primaryStage));
 
         // 主题选择器
         themeSelector = new ComboBox<>();
         themeSelector.getItems().addAll("🌑 Classic Dark", "⚪️ Apple Clean", "👾 Cyberpunk", "💧 Dynamic Blue");
-        themeSelector.setValue("🌑 Classic Dark"); // 默认选中 Classic Dark 测试
+        themeSelector.setValue("🌑 Classic Dark");
         themeSelector.setOnAction(e -> applyTheme(themeSelector.getValue()));
         themeSelector.setMaxWidth(Double.MAX_VALUE);
         themeSelector.setPrefHeight(35);
@@ -128,7 +133,7 @@ public class ModernMusicPlayer extends Application {
         HBox controls = new HBox(35);
         controls.setAlignment(Pos.CENTER);
         btnPrev = createIconButton("⏮");
-        btnPlay = createPlayButton();
+        btnPlay = createPlayButton(); // 注意：这里只创建对象，样式在 applyTheme 中初始化
         btnNext = createIconButton("⏭");
 
         HBox volBox = new HBox(10);
@@ -153,10 +158,15 @@ public class ModernMusicPlayer extends Application {
         setupSliderListeners();
 
         // --- 启动 ---
+        // 先应用一次主题，初始化样式
         applyTheme("🌑 Classic Dark");
 
         Scene scene = new Scene(root, 1050, 720);
-        primaryStage.setTitle("EchoPlayer V8 - Perfect UI");
+
+        // ✨✨✨ 注入隐藏滚动条的 CSS ✨✨✨
+        hideScrollBars(scene);
+
+        primaryStage.setTitle("EchoPlayer V10 - Final Perfect UI");
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -165,97 +175,140 @@ public class ModernMusicPlayer extends Application {
     }
 
     // ==========================================
-    //   🎨 主题核心逻辑 (修复下拉框白底问题)
+    //   🛠 CSS 注入工具 (隐藏滚动条专用)
+    // ==========================================
+    private void hideScrollBars(Scene scene) {
+        String css =
+                ".list-view .scroll-bar:horizontal {" +
+                        "    -fx-pref-height: 0;" +
+                        "    -fx-opacity: 0;" +
+                        "}" +
+                        ".list-view .scroll-bar:vertical {" +
+                        "    -fx-pref-width: 0;" +
+                        "    -fx-opacity: 0;" +
+                        "}" +
+                        ".list-view .corner {" +
+                        "    -fx-background-color: transparent;" +
+                        "}";
+
+        try {
+            String base64Css = Base64.getEncoder().encodeToString(css.getBytes("UTF-8"));
+            scene.getStylesheets().add("data:text/css;base64," + base64Css);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ==========================================
+    //   🎨 主题核心逻辑
     // ==========================================
     private void applyTheme(String themeName) {
         String bgRoot, bgLeft, textMain, textSub, accentColor, sliderTrack;
-        String comboBg, comboText, comboBorder, comboHover; // 新增 hover 颜色
+        String comboBg, comboText, comboBorder, comboHover;
+        String playBtnStyle;
 
         boolean isLightMode = false;
         boolean isCyberpunk = false;
         boolean isDynamicBlue = false;
 
+        // --- 1. 定义配色方案 ---
         switch (themeName) {
             case "⚪️ Apple Clean":
-                bgRoot = "#FFFFFF";
-                bgLeft = "#F5F5F7";
-                textMain = "#1D1D1F";
-                textSub = "#86868B";
+                bgRoot = "linear-gradient(to bottom right, #FFFFFF, #F2F2F7)";
+                bgLeft = "rgba(245, 245, 247, 0.8)";
+                textMain = "#1C1C1E";
+                textSub = "#8E8E93";
                 accentColor = "#FA2D48";
-                sliderTrack = "#E5E5E5";
+                sliderTrack = "#E5E5EA";
 
                 comboBg = "#FFFFFF";
-                comboText = "#000000";
+                comboText = "#1C1C1E";
                 comboBorder = "#D1D1D6";
-                comboHover = "#F2F2F7"; // 浅灰悬停
+                comboHover = "#F2F2F7";
+
+                playBtnStyle = "-fx-background-color: linear-gradient(to bottom right, #FF2D55, #FF5E3A); -fx-text-fill: white;";
                 isLightMode = true;
                 break;
 
-            case "👾 Cyberpunk":
-                bgRoot = "#0b0b19";
-                bgLeft = "#13132b";
-                textMain = "#00f3ff";
-                textSub = "#ff0099";
-                accentColor = "#00f3ff";
-                sliderTrack = "#2a2a40";
-
-                comboBg = "#2a2a40";
-                comboText = "#00f3ff";
-                comboBorder = "#ff0099";
-                comboHover = "#3d3d5c"; // 稍亮的深紫悬停
-                isCyberpunk = true;
-                break;
-
-            case "💧 Dynamic Blue":
-                bgRoot = "#0f172a";
-                bgLeft = "#1e293b";
-                textMain = "#e0f2fe";
-                textSub = "#94a3b8";
-                accentColor = "#38bdf8";
-                sliderTrack = "#334155";
-
-                comboBg = "#334155";
-                comboText = "#ffffff";
-                comboBorder = "#38bdf8";
-                comboHover = "#475569"; // 亮一点的蓝灰悬停
-                isDynamicBlue = true;
-                break;
-
             case "🌑 Classic Dark":
-            default:
-                bgRoot = "#121212";
+                bgRoot = "linear-gradient(to bottom, #121212, #181818)";
                 bgLeft = "#000000";
                 textMain = "#FFFFFF";
                 textSub = "#B3B3B3";
                 accentColor = "#1DB954";
                 sliderTrack = "#404040";
 
-                comboBg = "#333333";
+                comboBg = "#282828";
                 comboText = "#FFFFFF";
-                comboBorder = "#555555";
-                comboHover = "#444444"; // 经典灰悬停
+                comboBorder = "#404040";
+                comboHover = "#3E3E3E";
+
+                playBtnStyle = "-fx-background-color: #FFFFFF; -fx-text-fill: #000000;";
+                break;
+
+            case "👾 Cyberpunk":
+                bgRoot = "linear-gradient(to bottom right, #0b0b19, #1a1a3d)";
+                bgLeft = "#13132b";
+                textMain = "#00f3ff";
+                textSub = "#ff0099";
+                accentColor = "#00f3ff";
+                sliderTrack = "#2a2a40";
+                comboBg = "#2a2a40";
+                comboText = "#00f3ff";
+                comboBorder = "#ff0099";
+                comboHover = "#3d3d5c";
+                playBtnStyle = "-fx-background-color: #00f3ff; -fx-text-fill: #000000;";
+                isCyberpunk = true;
+                break;
+
+            case "💧 Dynamic Blue":
+            default:
+                bgRoot = "linear-gradient(to bottom, #0f172a, #1e293b)";
+                bgLeft = "#0f172a";
+                textMain = "#e0f2fe";
+                textSub = "#94a3b8";
+                accentColor = "#38bdf8";
+                sliderTrack = "#334155";
+                comboBg = "#1e293b";
+                comboText = "#ffffff";
+                comboBorder = "#38bdf8";
+                comboHover = "#334155";
+                playBtnStyle = "-fx-background-color: #38bdf8; -fx-text-fill: #000000;";
+                isDynamicBlue = true;
                 break;
         }
 
-        // 1. 背景与文字
+        // --- 2. 应用基础背景与文字 ---
         root.setStyle("-fx-background-color: " + bgRoot + ";");
-        leftPanel.setStyle("-fx-background-color: " + bgLeft + ";");
+        leftPanel.setStyle("-fx-background-color: " + bgLeft + "; -fx-border-color: transparent;");
+
         listTitle.setTextFill(Color.web(accentColor));
         titleLabel.setTextFill(Color.web(textMain));
         artistLabel.setTextFill(Color.web(textSub));
         timeLabel.setTextFill(Color.web(textSub));
         volIcon.setTextFill(Color.web(textSub));
-        titleLabel.setEffect(isCyberpunk ? new Glow(0.8) : null);
-        artistLabel.setEffect(isCyberpunk ? new DropShadow(10, Color.web("#ff0099")) : null);
 
-        // 2. 滑块
-        String commonSliderStyle = "-fx-control-inner-background: " + sliderTrack + "; -fx-accent: " + accentColor + ";";
-        progressSlider.setStyle(commonSliderStyle);
-        volumeSlider.setStyle(commonSliderStyle);
+        if (isCyberpunk) {
+            titleLabel.setEffect(new Glow(0.8));
+            artistLabel.setEffect(new DropShadow(10, Color.web("#ff0099")));
+        } else {
+            titleLabel.setEffect(null);
+            artistLabel.setEffect(null);
+        }
 
-        // 3. 列表样式
+        // --- 3. 优化滑块 ---
+        String sliderStyle = String.format(
+                "-fx-control-inner-background: %s; -fx-accent: %s; -fx-background-color: transparent;",
+                sliderTrack, accentColor
+        );
+        progressSlider.setStyle(sliderStyle);
+        volumeSlider.setStyle(sliderStyle);
+
+        // --- 4. 优化列表 (字体加大，无滚动条) ---
         final String finalMainText = textMain;
-        final String selectionColor = isLightMode ? "rgba(0,0,0,0.05)" : (isDynamicBlue ? "rgba(56, 189, 248, 0.2)" : "rgba(255,255,255,0.1)");
+        final String hoverColor = isLightMode ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)";
+        final String selectionColor = isLightMode ? "#E5E5EA" : (isCyberpunk ? "rgba(0, 243, 255, 0.2)" : "#333333");
+
         playlistView.setCellFactory(lv -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -266,90 +319,91 @@ public class ModernMusicPlayer extends Application {
                 } else {
                     setText(item);
                     setTextFill(Color.web(finalMainText));
-                    String baseStyle = "-fx-font-size: 15px; -fx-padding: 10 5 10 5;";
+
+                    // ✨ 字体改为 16px，Padding 加大
+                    String baseStyle = "-fx-font-size: 16px; -fx-padding: 12 15 12 15; -fx-background-radius: 8;";
+
                     if (isSelected()) {
                         setStyle(baseStyle + "-fx-background-color: " + selectionColor + "; -fx-font-weight: bold;");
                     } else {
                         setStyle(baseStyle + "-fx-background-color: transparent;");
                     }
+
+                    setOnMouseEntered(e -> {
+                        if (!isSelected()) setStyle(baseStyle + "-fx-background-color: " + hoverColor + ";");
+                    });
+                    setOnMouseExited(e -> {
+                        if (!isSelected()) setStyle(baseStyle + "-fx-background-color: transparent;");
+                    });
                 }
             }
         });
         playlistView.refresh();
 
-        // 4. ✨✨✨ 下拉框终极修复 ✨✨✨
-
-        // A. 按钮本身样式
+        // --- 5. 优化下拉框 ---
         themeSelector.setStyle(
                 "-fx-background-color: " + comboBg + "; " +
                         "-fx-font-size: 13px; " +
+                        "-fx-text-fill: " + comboText + ";" +
                         "-fx-border-color: " + comboBorder + "; " +
-                        "-fx-border-radius: 5; " +
-                        "-fx-background-radius: 5;"
+                        "-fx-border-radius: 6; " +
+                        "-fx-background-radius: 6;"
         );
 
-        final String finalComboText = comboText;
-        final String finalComboBg = comboBg;
-        final String finalComboHover = comboHover;
+        final String fComboBg = comboBg;
+        final String fComboText = comboText;
+        final String fComboHover = comboHover;
 
-        // B. 按钮显示区域 (ButtonCell)
         themeSelector.setButtonCell(new ListCell<String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
+            @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                } else {
+                if (item != null) {
                     setText(item);
-                    setTextFill(Color.web(finalComboText));
+                    setTextFill(Color.web(fComboText));
                     setStyle("-fx-background-color: transparent;");
                 }
             }
         });
 
-        // C. 下拉弹窗列表 (Popup List)
         themeSelector.setCellFactory(lv -> new ListCell<String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
+            @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
-                    // 关键：空行也要填充背景色，否则会出现白色底
-                    setStyle("-fx-background-color: " + finalComboBg + ";");
+                    setStyle("-fx-background-color: " + fComboBg + ";");
                 } else {
                     setText(item);
-                    setTextFill(Color.web(finalComboText));
-
-                    // 默认状态
-                    setStyle("-fx-background-color: " + finalComboBg + "; -fx-padding: 5 10 5 10;");
-
-                    // 鼠标悬停变色效果 (模拟 CSS Hover)
-                    setOnMouseEntered(e -> {
-                        setStyle("-fx-background-color: " + finalComboHover + "; -fx-padding: 5 10 5 10;");
-                    });
-
-                    // 鼠标移出恢复默认
-                    setOnMouseExited(e -> {
-                        setStyle("-fx-background-color: " + finalComboBg + "; -fx-padding: 5 10 5 10;");
-                    });
+                    setTextFill(Color.web(fComboText));
+                    setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;");
+                    setOnMouseEntered(e -> setStyle("-fx-background-color: " + fComboHover + "; -fx-padding: 8 10 8 10;"));
+                    setOnMouseExited(e -> setStyle("-fx-background-color: " + fComboBg + "; -fx-padding: 8 10 8 10;"));
                 }
             }
         });
 
-        // 5. 按钮样式
-        String playBg = isLightMode ? "#333" : (isDynamicBlue ? "#38bdf8" : (isCyberpunk ? "#00f3ff" : "#FFF"));
-        String playFg = (isCyberpunk || isDynamicBlue) ? "#000" : "#FFF";
-        if (themeName.equals("🌑 Classic Dark")) playFg = "#000";
+        // --- 6. 优化按钮 (带状态动态调整) ---
 
-        btnPlay.setStyle(
-                "-fx-background-color: " + playBg + "; " +
-                        "-fx-text-fill: " + playFg + "; " +
-                        "-fx-background-radius: 100; " +
-                        "-fx-font-size: 22px; " +
-                        "-fx-min-width: 55px; " +
-                        "-fx-min-height: 55px;"
-        );
-        btnPlay.setEffect(isDynamicBlue ? new DropShadow(15, Color.web("#38bdf8")) : (isCyberpunk ? new DropShadow(15, Color.web("#00f3ff")) : null));
+        // 1. 保存当前主题的背景样式基础
+        currentPlayBtnStyleBase = playBtnStyle +
+                "-fx-background-radius: 100; " +
+                "-fx-min-width: 65px; " +
+                "-fx-min-height: 65px; " +
+                "-fx-cursor: hand;";
+
+        // 2. 初始应用“暂停状态”的图标（即三角形），根据当前播放器状态决定
+        boolean isPlaying = (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING);
+        updatePlayButtonIconStyle(isPlaying);
+
+        // 3. 阴影效果
+        if(themeName.equals("⚪️ Apple Clean")) {
+            btnPlay.setEffect(new DropShadow(15, Color.rgb(255, 45, 85, 0.4)));
+        } else if (themeName.equals("🌑 Classic Dark")) {
+            btnPlay.setEffect(new DropShadow(10, Color.rgb(255, 255, 255, 0.2)));
+        } else {
+            btnPlay.setEffect(isCyberpunk ? new DropShadow(15, Color.web("#00f3ff")) : null);
+        }
+
+        addHoverAnimation(btnPlay);
 
         updateButtonStyle(btnAdd, textSub, accentColor, isLightMode);
         updateButtonStyle(btnPrev, textMain, accentColor, isLightMode);
@@ -358,17 +412,79 @@ public class ModernMusicPlayer extends Application {
         updateVinylStyle(themeName);
     }
 
-    private void updateButtonStyle(Button btn, String normalColor, String hoverColor, boolean isLight) {
-        String borderColor = (btn == btnAdd) ? (isLight ? "#CCC" : "#555") : "transparent";
-        String hoverBorder = (btn == btnAdd) ? hoverColor : "transparent";
-        String size = (btn == btnAdd) ? "13" : "22";
+    // ==========================================
+    //   🔧 专门用来修播放/暂停图标大小不对齐的方法
+    // ==========================================
+    private void updatePlayButtonIconStyle(boolean isPlaying) {
+        if (isPlaying) {
+            // ⏸ 暂停图标状态 (双竖线)
+            // 修正：字体改小(28px)，Padding归零，保证完美居中
+            btnPlay.setStyle(currentPlayBtnStyleBase +
+                    "-fx-font-size: 30px; " +
+                    "-fx-padding: 0;"
+            );
+            btnPlay.setText("⏸");
+        } else {
+            // ▶ 播放图标状态 (三角形)
+            // 修正：字体改大(36px)，左边距加4px，解决视觉偏左问题
+            btnPlay.setStyle(currentPlayBtnStyleBase +
+                    "-fx-font-size: 36px; " +
+                    "-fx-padding: 0 0 0 4;"
+            );
+            btnPlay.setText("▶");
+        }
+    }
 
-        String base = "-fx-background-color: transparent; -fx-text-fill: " + normalColor + "; -fx-font-size: " + size + "px; -fx-border-color: " + borderColor + "; -fx-border-radius: 20;";
-        String hover = "-fx-background-color: transparent; -fx-text-fill: " + hoverColor + "; -fx-font-size: " + size + "px; -fx-border-color: " + hoverBorder + "; -fx-border-radius: 20;";
+    private void updateButtonStyle(Button btn, String normalColor, String hoverColor, boolean isLight) {
+        String borderColor = (btn == btnAdd) ? (isLight ? "#C7C7CC" : "#3A3A3C") : "transparent";
+        String hoverBorder = (btn == btnAdd) ? hoverColor : "transparent";
+        String size = (btn == btnAdd) ? "12" : "24";
+        String fontWeight = (btn == btnAdd) ? "bold" : "normal";
+
+        String base =
+                "-fx-background-color: transparent; " +
+                        "-fx-text-fill: " + normalColor + "; " +
+                        "-fx-font-size: " + size + "px; " +
+                        "-fx-font-weight: " + fontWeight + "; " +
+                        "-fx-border-color: " + borderColor + "; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;";
+
+        String hover =
+                "-fx-background-color: transparent; " +
+                        "-fx-text-fill: " + hoverColor + "; " +
+                        "-fx-font-size: " + size + "px; " +
+                        "-fx-font-weight: " + fontWeight + "; " +
+                        "-fx-border-color: " + hoverBorder + "; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;";
 
         btn.setStyle(base);
-        btn.setOnMouseEntered(e -> btn.setStyle(hover));
-        btn.setOnMouseExited(e -> btn.setStyle(base));
+
+        btn.setOnMouseEntered(e -> {
+            btn.setStyle(hover);
+            btn.setScaleX(1.1);
+            btn.setScaleY(1.1);
+        });
+
+        btn.setOnMouseExited(e -> {
+            btn.setStyle(base);
+            btn.setScaleX(1.0);
+            btn.setScaleY(1.0);
+        });
+    }
+
+    private void addHoverAnimation(Button btn) {
+        btn.setOnMouseEntered(e -> {
+            btn.setScaleX(1.1);
+            btn.setScaleY(1.1);
+        });
+        btn.setOnMouseExited(e -> {
+            btn.setScaleX(1.0);
+            btn.setScaleY(1.0);
+        });
     }
 
     private void updateVinylStyle(String theme) {
@@ -376,25 +492,36 @@ public class ModernMusicPlayer extends Application {
         vinylText.setFill(Color.WHITE);
 
         if (theme.equals("⚪️ Apple Clean")) {
-            disc.setFill(Color.web("#333"));
-            disc.setEffect(new DropShadow(10, Color.web("#999")));
-            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#FF99AA")), new Stop(1, Color.web("#FA2D48"))));
+            disc.setFill(Color.web("#2C2C2E"));
+            disc.setEffect(new DropShadow(20, Color.rgb(0,0,0,0.15)));
+            vinylText.setFill(Color.web("#E5E5EA"));
+            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.web("#FF5E3A")),
+                    new Stop(1, Color.web("#FF2D55"))));
+
+        } else if (theme.equals("🌑 Classic Dark")) {
+            disc.setFill(Color.web("#121212"));
+            disc.setEffect(new DropShadow(15, Color.rgb(255,255,255,0.05)));
+            vinylText.setFill(Color.web("#AAAAAA"));
+            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.web("#1DB954")),
+                    new Stop(1, Color.web("#191414"))));
 
         } else if (theme.equals("👾 Cyberpunk")) {
             disc.setFill(Color.BLACK);
             disc.setEffect(new DropShadow(20, Color.web("#00f3ff")));
             vinylText.setFill(Color.web("#00f3ff"));
-            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#00f3ff")), new Stop(1, Color.web("#ff0099"))));
+            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.web("#00f3ff")),
+                    new Stop(1, Color.web("#ff0099"))));
 
         } else if (theme.equals("💧 Dynamic Blue")) {
             disc.setFill(Color.web("#020617"));
             disc.setEffect(new DropShadow(20, Color.web("#38bdf8")));
             vinylText.setFill(Color.web("#e0f2fe"));
-            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#7dd3fc")), new Stop(1, Color.web("#0ea5e9"))));
-
-        } else { // Classic
-            disc.setEffect(new DropShadow(15, Color.BLACK));
-            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE, new Stop(0, Color.web("#444")), new Stop(1, Color.web("#1DB954"))));
+            labelCenter.setFill(new LinearGradient(0,0,1,1,true,CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.web("#7dd3fc")),
+                    new Stop(1, Color.web("#0ea5e9"))));
         }
     }
 
@@ -448,11 +575,16 @@ public class ModernMusicPlayer extends Application {
             if (mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
                 mediaPlayer.pause();
                 rotateAnimation.pause();
-                btnPlay.setText("▶");
+
+                // 切换到“未播放”状态 (显示三角形)
+                updatePlayButtonIconStyle(false);
+
             } else {
                 mediaPlayer.play();
                 rotateAnimation.play();
-                btnPlay.setText("⏸");
+
+                // 切换到“播放中”状态 (显示双竖线)
+                updatePlayButtonIconStyle(true);
             }
         }
     }
@@ -467,7 +599,9 @@ public class ModernMusicPlayer extends Application {
         playlistView.getSelectionModel().select(index);
         titleLabel.setText(file.getName().replace(".mp3", ""));
         artistLabel.setText("Now Playing");
-        btnPlay.setText("⏸");
+
+        // 开始播放 -> 显示暂停图标
+        updatePlayButtonIconStyle(true);
 
         try {
             Media media = new Media(file.toURI().toString());
