@@ -1,5 +1,4 @@
-import javafx.animation.Interpolator;
-import javafx.animation.RotateTransition;
+import javafx.animation.*;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -10,7 +9,10 @@ import javafx.scene.effect.Glow;
 import javafx.scene.layout.*;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
-import javafx.scene.paint.*;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
@@ -20,7 +22,9 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -304,27 +308,79 @@ public class ModernMusicPlayer extends Application {
         progressSlider.setStyle(sliderStyle);
         volumeSlider.setStyle(sliderStyle);
 
-        // --- 4. 优化列表 (字体加大，无滚动条) ---
+// --- 4. 优化列表 (无缝首尾相连滚动版) ---
         final String finalMainText = textMain;
         final String hoverColor = isLightMode ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)";
         final String selectionColor = isLightMode ? "#E5E5EA" : (isCyberpunk ? "rgba(0, 243, 255, 0.2)" : "#333333");
 
         playlistView.setCellFactory(lv -> new ListCell<String>() {
+            // 两个文本节点：一个是本体，一个是分身（用来接龙）
+            private final Text text1 = new Text();
+            private final Text text2 = new Text();
+            private final Pane container = new Pane(text1, text2);
+            private final Rectangle clip = new Rectangle();
+
+            private ParallelTransition marqueeAnimation;
+            private final double GAP = 60; // 首尾相连的间距
+
+            {
+                // 初始化字体
+                Font font = Font.font(16);
+                text1.setFont(font);
+                text2.setFont(font);
+
+                text1.setTextOrigin(javafx.geometry.VPos.CENTER);
+                text2.setTextOrigin(javafx.geometry.VPos.CENTER);
+
+                // 强制限制容器宽度
+                container.prefWidthProperty().bind(lv.widthProperty().subtract(40));
+                container.setPrefHeight(30);
+
+                // 遮罩
+                clip.widthProperty().bind(container.widthProperty());
+                clip.heightProperty().bind(container.heightProperty());
+                container.setClip(clip);
+
+                // 垂直居中
+                text1.layoutYProperty().bind(container.heightProperty().divide(2));
+                text2.layoutYProperty().bind(container.heightProperty().divide(2));
+
+                // 默认隐藏分身
+                text2.setVisible(false);
+            }
+
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
+
+                // 1. 停止并重置动画
+                if (marqueeAnimation != null) {
+                    marqueeAnimation.stop();
+                }
+                text1.setTranslateX(0);
+                text2.setTranslateX(0);
+                text2.setVisible(false); // 默认隐藏分身
+
                 if (empty || item == null) {
                     setText(null);
+                    setGraphic(null);
                     setStyle("-fx-background-color: transparent;");
                 } else {
-                    setText(item);
-                    setTextFill(Color.web(finalMainText));
+                    setText(null);
+                    // 两个文本都要设置内容
+                    text1.setText(item);
+                    text2.setText(item);
+                    text1.setFill(Color.web(finalMainText));
+                    text2.setFill(Color.web(finalMainText));
 
-                    // ✨ 字体改为 16px，Padding 加大
-                    String baseStyle = "-fx-font-size: 16px; -fx-padding: 12 15 12 15; -fx-background-radius: 8;";
+                    setGraphic(container);
+
+                    String baseStyle = "-fx-padding: 8 15 8 15; -fx-background-radius: 8;";
 
                     if (isSelected()) {
                         setStyle(baseStyle + "-fx-background-color: " + selectionColor + "; -fx-font-weight: bold;");
+                        // 延迟检查是否需要滚动
+                        javafx.application.Platform.runLater(this::startMarquee);
                     } else {
                         setStyle(baseStyle + "-fx-background-color: transparent;");
                     }
@@ -335,6 +391,52 @@ public class ModernMusicPlayer extends Application {
                     setOnMouseExited(e -> {
                         if (!isSelected()) setStyle(baseStyle + "-fx-background-color: transparent;");
                     });
+                }
+            }
+
+            private void startMarquee() {
+                if (getItem() == null || !isSelected()) return;
+
+                double textW = text1.getLayoutBounds().getWidth();
+                double cellW = container.getWidth();
+                if (cellW == 0) cellW = container.getPrefWidth();
+
+                // 只有文字宽度超过容器宽度时，才开启跑马灯
+                if (textW > cellW && cellW > 0) {
+                    // 显示分身
+                    text2.setVisible(true);
+
+                    // 计算滚动的总距离（一个周期的距离 = 本体宽度 + 间距）
+                    double cycleDistance = textW + GAP;
+
+                    // 设定初始位置
+                    // text1 从 0 开始
+                    // text2 紧跟在 text1 后面 (GAP 像素之后)
+
+                    // 创建动画：两个文字一起向左移动
+                    TranslateTransition tt1 = new TranslateTransition();
+                    tt1.setNode(text1);
+                    tt1.setFromX(0);
+                    tt1.setToX(-cycleDistance); // 移出视野
+                    tt1.setInterpolator(Interpolator.LINEAR); // 匀速
+
+                    TranslateTransition tt2 = new TranslateTransition();
+                    tt2.setNode(text2);
+                    tt2.setFromX(cycleDistance); // 从右侧外面开始
+                    tt2.setToX(0); // 移动到 text1 初始的位置
+                    tt2.setInterpolator(Interpolator.LINEAR); // 匀速
+
+                    // 组合动画
+                    marqueeAnimation = new ParallelTransition(tt1, tt2);
+
+                    // 速度控制：距离越长，时间越长，保持速度恒定
+                    double durationSeconds = cycleDistance / 25.0;
+                    marqueeAnimation.setCycleCount(javafx.animation.Animation.INDEFINITE);
+                    // 必须让两个动画时间严格一致
+                    tt1.setDuration(Duration.seconds(durationSeconds));
+                    tt2.setDuration(Duration.seconds(durationSeconds));
+
+                    marqueeAnimation.play();
                 }
             }
         });
