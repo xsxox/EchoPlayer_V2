@@ -332,21 +332,46 @@ public class ModernMusicPlayer extends Application {
     }
 
     private void playSong(int index) {
+        // 1. 越界检查
         if (index < 0 || index >= playList.size()) return;
-        if (mediaPlayer != null) { mediaPlayer.stop(); mediaPlayer.dispose(); }
 
+        // 2. 停止上一首
+        if (mediaPlayer != null) {
+            mediaPlayer.stop();
+            mediaPlayer.dispose();
+        }
+
+        // 3. 更新当前索引和文件
         currentIndex = index;
         File file = playList.get(index);
 
+        // --- 🔥 修复核心：同步左侧列表的高亮选中状态 ---
+        // 获取当前文件名
+        String songName = file.getName();
+        // 在左侧列表视图中查找这个名字的位置
+        // (这样做是为了兼容搜索状态，搜索时列表顺序可能变了，直接用index不对)
+        int listIndex = playlistView.getItems().indexOf(songName);
+
+        if (listIndex != -1) {
+            // 选中该行
+            playlistView.getSelectionModel().select(listIndex);
+            // 自动滚动到该行 (防止切歌时歌曲在屏幕外面看不见)
+            playlistView.scrollTo(listIndex);
+        }
+        // ---------------------------------------------
+
+        // 4. 更新界面文字
         titleLabel.setText(file.getName().replace(".mp3", ""));
         artistLabel.setText("Now Playing");
         updatePlayButtonIconStyle(true);
 
+        // 5. 创建播放器并开始播放
         try {
             Media media = new Media(file.toURI().toString());
             mediaPlayer = new MediaPlayer(media);
             mediaPlayer.setVolume(volumeSlider.getValue());
 
+            // 频谱可视化监听
             mediaPlayer.setAudioSpectrumListener((timestamp, duration, magnitudes, phases) -> {
                 for (int i = 0; i < BANDS && i < magnitudes.length; i++) {
                     double mag = magnitudes[i] + 60;
@@ -359,8 +384,12 @@ public class ModernMusicPlayer extends Application {
             mediaPlayer.setAudioSpectrumInterval(0.04);
 
             mediaPlayer.play();
-            vinylRecord.setRotate(0); rotateAnimation.playFromStart();
 
+            // 重置动画
+            vinylRecord.setRotate(0);
+            rotateAnimation.playFromStart();
+
+            // 进度条监听
             mediaPlayer.currentTimeProperty().addListener((obs, oldT, newT) -> {
                 if (!progressSlider.isValueChanging()) {
                     progressSlider.setValue((newT.toMillis() / media.getDuration().toMillis()) * 100);
@@ -368,10 +397,12 @@ public class ModernMusicPlayer extends Application {
                 timeLabel.setText(formatTime(newT) + " / " + formatTime(media.getDuration()));
             });
 
+            // 播放结束自动下一首
             mediaPlayer.setOnEndOfMedia(this::playNextSong);
 
         } catch (Exception e) {
             artistLabel.setText("Load Error");
+            e.printStackTrace(); // 方便调试
         }
     }
 
@@ -753,7 +784,7 @@ public class ModernMusicPlayer extends Application {
         if (files != null) { for (File f : files) addToPlaylistSafe(f); }
     }
 
-    // ✨✨✨ 修复：使用 UTF-8 读取播放列表 ✨✨✨
+    // 使用 UTF-8 读取播放列表
     private void loadSavedPlaylist() {
         try {
             File f = new File("playlist.txt");
@@ -767,7 +798,7 @@ public class ModernMusicPlayer extends Application {
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    // ✨✨✨ 修复：绝对路径去重 ✨✨✨
+    // 绝对路径去重
     private void addToPlaylistSafe(File file) {
         boolean exists = playList.stream().anyMatch(f -> f.getAbsolutePath().equals(file.getAbsolutePath()));
         if (!exists) {
@@ -802,7 +833,7 @@ public class ModernMusicPlayer extends Application {
         });
     }
 
-    // ✨✨✨ 修复：使用 UTF-8 写入播放列表 ✨✨✨
+    // 使用 UTF-8 写入播放列表
     @Override public void stop() throws Exception {
         super.stop();
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("playlist.txt"), StandardCharsets.UTF_8))) {
